@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from ai_agents.research_agent import run_research_agent
-from ai_agents.warren_buffet_agent import warren_buffett_agent
+from ai_agents.warren_buffet_agent import warren_buffett_agent, get_research_brief
 from ai_agents.portfolio_and_risk_manager import run_portfolio_manager_agent
 from ai_agents.what_if_agent import run_what_if_agent
 from ai_agents.final_orchestrator_agent import run_final_orchestrator_agent, generate_ascii_chart
@@ -200,10 +200,10 @@ def main():
     
     if debug_mode:
         console.print("[bold red]DEBUG MODE ENABLED[/bold red]")
-        capital = 500000
-        risk_profile = 7
-        backtesting_date = "2022-01-01"
-        portfolio = generate_portfolio_allocation(capital, backtesting_date)
+        capital = 10000
+        risk_profile = 5
+        backtesting_date = None
+        portfolio = {}
     else:
         capital = get_capital()
         portfolio = get_portfolio(capital)
@@ -218,8 +218,13 @@ def main():
         tickers_to_research = get_tickers_to_research()
 
     console.print(f"Researching {len(tickers_to_research)} tickers...")
+    
+    # 1. Generate the Research Brief (Intent-Driven)
+    console.print("Generating Research Brief based on Warren Buffett strategy...", style="bold yellow")
+    research_brief = get_research_brief()
+
     # Run the async research agent synchronously
-    research_output = asyncio.run(run_research_agent(tickers_to_research, backtesting_date))
+    research_output = asyncio.run(run_research_agent(tickers_to_research, research_brief, backtesting_date))
     
     # Directly access the FinancialSummary objects from the results
     financial_data = {res.financial_summary.ticker: res.financial_summary for res in research_output.results}

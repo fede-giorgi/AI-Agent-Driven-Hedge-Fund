@@ -18,7 +18,7 @@ def run_final_orchestrator_agent(
     llm = get_llm()
     
     system_message = SystemMessage(
-        content="""You are the FinalOrchestratorAgent. You have overseen a simulation loop where a Portfolio Manager, a Monitor, and a What-If Challenger have debated trading strategies for 5 iterations.
+        content="""You are the FinalOrchestratorAgent. You have overseen a simulation loop where a Portfolio Manager, a Monitor, and a What-If Challenger have debated trading strategies for 10 iterations.
         
         Your Goal: Make the FINAL, definitive trading decision to be executed on the user's account.
 

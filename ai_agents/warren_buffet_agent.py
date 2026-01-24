@@ -18,6 +18,62 @@ from tools.analyze_moat import analyze_moat
 from tools.analyze_pricing_power import analyze_pricing_power
 from tools.calculate_intrinsic_value import calculate_intrinsic_value
 
+# Define the Research Strategy/Briefing
+def get_research_brief():
+    """
+    Generates the Research Brief that defines exactly what the Research Agent should look for.
+    This ensures the data gathering is intent-driven based on Warren Buffett's analysis needs.
+    """
+    return {
+        "focus_areas": [
+            "Current Stock Price",
+            "Economic Moat (Competitive Advantage)",
+            "Management Quality & Integrity",
+            "Financial Strength & Health",
+            "Earnings Consistency & Growth",
+            "Intrinsic Value Calculation"
+        ],
+        "required_metrics": [
+            "return_on_invested_capital", 
+            "gross_margin", 
+            "operating_margin",
+            "debt_to_equity", 
+            "return_on_equity", 
+            "current_ratio", 
+            "interest_coverage", 
+            "revenue_growth", 
+            "earnings_growth", 
+            "book_value_growth", 
+            "payout_ratio", 
+            "free_cash_flow_per_share", 
+            "earnings_per_share"
+        ],
+        "required_line_items": [
+            "capital_expenditure",
+            "depreciation_and_amortization",
+            "net_income",
+            "outstanding_shares",
+            "total_assets",
+            "total_liabilities",
+            "shareholders_equity",
+            "dividends_and_other_cash_distributions",
+            "issuance_or_purchase_of_equity_shares",
+            "gross_profit",
+            "revenue",
+            "free_cash_flow",
+            "current_assets",
+            "current_liabilities"
+        ],
+        "search_queries": [
+            "competitive advantage",
+            "economic moat",
+            "management integrity",
+            "capital allocation strategy",
+            "regulatory risks",
+            "antitrust issues",
+            "market share trends"
+        ]
+    }
 
 def warren_buffett_agent(summary: FinancialSummary) -> dict:
     """

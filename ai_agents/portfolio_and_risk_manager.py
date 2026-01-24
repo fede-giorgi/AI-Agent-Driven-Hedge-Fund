@@ -44,21 +44,20 @@ def run_portfolio_manager_agent(
            - High conviction + High Risk = Larger position size.
            - Bearish signals = Evaluate selling. Reduce exposure significantly, but consider portfolio balance. Immediate full liquidation is not mandatory if the position is small or acts as a hedge, but generally, bearish implies selling.
 
-        4. **Execution Rules**:
-           - **Sell First**: Generate cash from Bearish/Neutral sells before buying.
-           - **Buy Second**: Allocate available cash to Bullish stocks with highest conviction.
-           - **Rebalance**: If a position exceeds its target weight significantly, trim it.
+        4. **Execution Guidelines**:
+           - **Liquidity**: Ensure sufficient cash is available for proposed buys (considering sell proceeds).
+           - **Allocation**: Prioritize high-conviction Bullish stocks.
+           - **Risk Control**: Monitor position weights to avoid excessive concentration.
 
         Refinement Logic:
         - Critically evaluate the "What-If" agent's feedback. Do not accept it blindly. Only adopt it if it genuinely improves risk-adjusted returns or fixes a violation.
         - If the previous iteration had a violation, you MUST adjust your trades to fix it.
 
-        Hard Constraints:
+        Constraints:
         - Trades must be JSON objects: {{"action":"buy|sell","ticker":"XXX","shares":int>0}}
         - No shorting: do not sell more shares than currently held.
         - Only trade tickers with a valid positive price in price_map.
-        - Avoid micro trades: skip if trade_value < 100 (shares*price).
-        - Try to keep net buy cost within available_capital + expected sell proceeds (assume sells execute first).
+        - Ensure net buy cost does not exceed available capital + expected sell proceeds.
 
         Output JSON ONLY:
         {{
