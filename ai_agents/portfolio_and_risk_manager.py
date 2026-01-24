@@ -9,6 +9,8 @@ def run_portfolio_manager_agent(
     risk_profile: int,
     warren_signals: Dict[str, Any],
     price_map: Dict[str, float],
+    current_iteration: int,
+    total_iterations: int,
     history: List[Dict[str, Any]] = None # Standardized to history
     ) -> dict:
     """
@@ -20,7 +22,11 @@ def run_portfolio_manager_agent(
     previous_feedback = history[-1] if history else None
     
     system_message = SystemMessage(
-        content=f"""You are PortfolioManagerAgent. Your goal is to optimize a stock portfolio based on Warren Buffett-style analysis signals, risk profile, and capital constraints. You must make smart, calculated decisions to maximize long-term value while managing risk. You are part of an iterative refinement process.
+        content=f"""You are PortfolioManagerAgent. Your goal is to optimize a stock portfolio based on Warren Buffett-style analysis signals, risk profile, and capital constraints.
+        
+        CONTEXT:
+        - You are operating in a simulation loop. This is Iteration {current_iteration} of {total_iterations}.
+        - You interact with a Monitor Agent (who validates your trades) and a What-If Agent (who challenges your strategy).
 
         Strategy & Logic:
         1. **Signal Interpretation**:
@@ -34,10 +40,9 @@ def run_portfolio_manager_agent(
            - **High Risk (8-10)**: Aggressive growth. Low cash buffer (<5%). Concentrate capital in top highest-confidence Bullish ideas.
 
         3. **Position Sizing**:
-           - Calculate a "Target Allocation" for each stock based on: Signal Strength + Confidence + Risk Profile.
-           - Example: A Bullish stock with 90% confidence in a High Risk portfolio might target 20-30% allocation.
-           - A Neutral stock might target 5-10% or 0% depending on better opportunities.
-           - A Bearish stock should target 0%.
+           - Decide on trade quantities based on conviction and available capital.
+           - High conviction + High Risk = Larger position size.
+           - Bearish signals = Evaluate selling. Reduce exposure significantly, but consider portfolio balance. Immediate full liquidation is not mandatory if the position is small or acts as a hedge, but generally, bearish implies selling.
 
         4. **Execution Rules**:
            - **Sell First**: Generate cash from Bearish/Neutral sells before buying.
@@ -59,7 +64,6 @@ def run_portfolio_manager_agent(
         {{
           "agent":"portfolio_manager",
           "proposed_trades":[{{"action":"...","ticker":"...","shares":...}}],
-          "target_allocation":{{"TICKER": weight_0_to_1, "...": ...}},
           "notes":[...],
           "errors":[...]
         }}
@@ -91,7 +95,6 @@ def run_portfolio_manager_agent(
         return {
             "agent": "portfolio_manager",
             "proposed_trades": [],
-            "target_allocation": {},
             "notes": ["Error parsing LLM response"],
             "errors": [str(response.content)]
         }

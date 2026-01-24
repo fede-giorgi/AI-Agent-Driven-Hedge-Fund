@@ -8,6 +8,8 @@ def run_what_if_agent(
     available_capital: float,
     proposed_trades: List[Dict[str, Union[str, int, float]]],
     price_map: Dict[str, float],
+    current_iteration: int,
+    total_iterations: int,
     warren_signals: Dict[str, Any] = None,
     history: List[Dict[str, Any]] = None
     ) -> dict:
@@ -17,7 +19,9 @@ def run_what_if_agent(
     llm = get_llm()
     
     system_message = SystemMessage(
-        content="""You are WhatIfAgent. Your goal is to CHALLENGE the proposed trades from the Portfolio Manager. You act as a "Devil's Advocate" or Scenario Planner.
+        content=f"""You are WhatIfAgent. Your goal is to CHALLENGE the proposed trades from the Portfolio Manager. You act as a "Devil's Advocate" or Scenario Planner.
+        
+        CONTEXT: Iteration {current_iteration} of {total_iterations}.
         
         Your Task:
         1. Analyze the proposed trades.
@@ -28,15 +32,15 @@ def run_what_if_agent(
         3. Provide a concrete alternative trade suggestion if you think it's better.
 
         Output JSON ONLY:
-        {
+        {{
           "agent": "what_if",
           "critique": "Brief critique of the proposed trades",
-          "alternative_scenario": {
+          "alternative_scenario": {{
              "description": "Description of the alternative",
-             "proposed_trades": [{"action":"...","ticker":"...","shares":...}]
-          },
+             "proposed_trades": [{{"action":"...","ticker":"...","shares":...}}]
+          }},
           "reasoning": "Why this alternative might be safer or better"
-        }
+        }}
         """
     )
     

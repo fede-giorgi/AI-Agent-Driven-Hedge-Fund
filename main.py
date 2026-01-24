@@ -1,12 +1,14 @@
 import json
 import sys
 import time
+import asyncio
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from rich.markdown import Markdown
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
 from ai_agents.research_agent import run_research_agent
 from ai_agents.warren_buffet_agent import warren_buffett_agent
@@ -182,6 +184,9 @@ def main():
     """
     Main function to run the financial agent.
     """
+    # Load environment variables
+    load_dotenv()
+
     # Start Timer
     start_time = time.time()
     
@@ -213,9 +218,12 @@ def main():
         tickers_to_research = get_tickers_to_research()
 
     console.print(f"Researching {len(tickers_to_research)} tickers...")
-    research_output_json = run_research_agent(tickers_to_research, backtesting_date)
-    research_output = json.loads(research_output_json)
-    financial_data = {res['financial_summary']['ticker']: FinancialSummary(**res['financial_summary']) for res in research_output.get('results', [])}
+    # Run the async research agent synchronously
+    research_output = asyncio.run(run_research_agent(tickers_to_research, backtesting_date))
+    
+    # Directly access the FinancialSummary objects from the results
+    financial_data = {res.financial_summary.ticker: res.financial_summary for res in research_output.results}
+    
     console.print("Research complete.")
 
     # 2. Warren Buffett Agent (Run once)
@@ -257,8 +265,9 @@ def main():
     initial_portfolio = portfolio.copy()
     initial_capital = capital
 
-    for i in range(1, 6):
-        console.rule(f"[bold yellow]Iteration {i}/5[/bold yellow]")
+    total_iterations = 10
+    for i in range(1, total_iterations + 1):
+        console.rule(f"[bold yellow]Iteration {i}/{total_iterations}[/bold yellow]")
 
         # 1. Display Context (Signals & Current State)
         signals_text = Text()
@@ -280,7 +289,7 @@ def main():
         # 3. Portfolio Manager Agent
         console.print("\n[bold cyan]--- Portfolio Manager Agent ---[/bold cyan]")
         pm_output = run_portfolio_manager_agent(
-            initial_portfolio, initial_capital, risk_profile, warren_buffett_signals, price_map, history
+            initial_portfolio, initial_capital, risk_profile, warren_buffett_signals, price_map, i, total_iterations, history
         )
         console.print_json(data=pm_output)
         
@@ -288,16 +297,16 @@ def main():
 
         # 4. Monitor Agent (Check constraints)
         console.print("\n[bold cyan]--- Monitor Agent ---[/bold cyan]")
-        monitor_output = run_monitor_agent(proposed_trades, initial_portfolio, initial_capital, price_map, history)
+        monitor_output = run_monitor_agent(proposed_trades, initial_portfolio, initial_capital, price_map, i, total_iterations, history)
         console.print_json(data=monitor_output)
         
         is_valid = monitor_output.get("is_valid", False)
         
         # 5. What If Agent (Challenger) - Skip on last iteration
         what_if_output = {}
-        if i < 5:
+        if i < total_iterations:
             console.print("\n[bold cyan]--- What If Agent ---[/bold cyan]")
-            what_if_output = run_what_if_agent(initial_portfolio, initial_capital, proposed_trades, price_map, warren_buffett_signals, history)
+            what_if_output = run_what_if_agent(initial_portfolio, initial_capital, proposed_trades, price_map, i, total_iterations, warren_buffett_signals, history)
             console.print_json(data=what_if_output)
         
         # Store iteration data

@@ -9,6 +9,8 @@ def run_monitor_agent(
     current_portfolio: Dict[str, int],
     available_capital: float,
     price_map: Dict[str, float],
+    current_iteration: int,
+    total_iterations: int,
     history: List[Dict[str, Any]] = None # Added history for standardization
     ) -> dict:
     """
@@ -16,10 +18,12 @@ def run_monitor_agent(
     """
     llm = get_llm()
 
-    system_instruction = SystemMessage("""You are MonitorAgent. Your job is to validate that the proposed stock trading configuration is within bounds and executable.
+    system_instruction = SystemMessage(f"""You are MonitorAgent. Your job is to validate that the proposed stock trading configuration is within bounds and executable.
+    
+    CONTEXT: Iteration {current_iteration} of {total_iterations}.
 
     Checks (must all pass):
-    - Schema: each trade has action in {buy,sell}, ticker string, shares integer > 0.
+    - Schema: each trade has action in {{buy,sell}}, ticker string, shares integer > 0.
     - Known ticker + price: ticker exists in price_map AND price > 0.
     - Holdings: for sells, shares <= current_portfolio[ticker].
     - Budget: compute expected_cash_change assuming sells first:
@@ -32,18 +36,18 @@ def run_monitor_agent(
     If invalid: do NOT “fix” trades unless requested; just report violations clearly.
 
     Output JSON ONLY in this format:
-    {
+    {{
     "agent":"monitor",
     "is_valid": true|false,
-    "summary":{
+    "summary":{{
         "buy_cost": number,
         "sell_proceeds": number,
         "required_cash": number,
         "available_capital": number
-    },
-    "violations":[{"type":"...","ticker":"...","detail":"..."}],
+    }},
+    "violations":[{{"type":"...","ticker":"...","detail":"..."}}],
     "notes":[...]
-    }
+    }}
     """)
 
     user_content = HumanMessage(f"""Please validate the following input configuration:

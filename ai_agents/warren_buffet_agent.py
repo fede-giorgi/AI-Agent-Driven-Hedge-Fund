@@ -2,7 +2,7 @@
 This script defines an investment agent that analyzes stocks according to Warren Buffett's value investing principles.
 """
 from langchain.tools import tool
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
 import math
 import json
@@ -27,36 +27,104 @@ def warren_buffett_agent(summary: FinancialSummary) -> dict:
     
     llm = get_llm()
     
-    # The tools now use the provided summary object directly, avoiding redundant API calls.
-    analysis_results = {
-        "fundamentals": analyze_fundamentals.func(summary=summary),
-        "consistency": analyze_consistency.func(summary=summary),
-        "moat": analyze_moat.func(summary=summary),
-        "management": analyze_management_quality.func(summary=summary),
-        "book_value_growth": analyze_book_value_growth.func(summary=summary),
-        "intrinsic_value": calculate_intrinsic_value.func(summary=summary),
-        "pricing_power": analyze_pricing_power.func(summary=summary),
-    }
+    # 1. Define tools that are bound to the specific FinancialSummary of this stock.
+    # This allows the LLM to "call" the analysis functions without needing to pass the complex object.
+    
+    @tool
+    def check_fundamentals():
+        """Analyzes key financial health metrics like ROE, debt, margins, and liquidity."""
+        return analyze_fundamentals.func(summary=summary)
 
+    @tool
+    def check_consistency():
+        """Checks for a track record of consistent and growing earnings."""
+        return analyze_consistency.func(summary=summary)
+
+    @tool
+    def check_moat():
+        """Evaluates the company's durable competitive advantage (moat)."""
+        return analyze_moat.func(summary=summary)
+
+    @tool
+    def check_management():
+        """Assesses management's shareholder-friendliness (buybacks, dividends)."""
+        return analyze_management_quality.func(summary=summary)
+
+    @tool
+    def check_book_value_growth():
+        """Analyzes the growth of book value per share over time."""
+        return analyze_book_value_growth.func(summary=summary)
+
+    @tool
+    def check_intrinsic_value():
+        """Estimates the company's intrinsic value using a DCF model."""
+        return calculate_intrinsic_value.func(summary=summary)
+
+    @tool
+    def check_pricing_power():
+        """Assesses the company's ability to raise prices (gross margins)."""
+        return analyze_pricing_power.func(summary=summary)
+
+    tools = [
+        check_fundamentals, 
+        check_consistency, 
+        check_moat, 
+        check_management, 
+        check_book_value_growth, 
+        check_intrinsic_value, 
+        check_pricing_power
+    ]
+    
+    llm_with_tools = llm.bind_tools(tools)
+
+    # 2. Agent Loop
+    messages = [
+        SystemMessage(content=f"""You are a virtual Warren Buffett. Your goal is to evaluate the company {summary.ticker} based on value investing principles.
+    
+    You have access to specific analysis tools. You can call them in any order to gather the insights you need.
+    Once you have enough information, you will provide a final investment signal.
+    
+    Key Principles:
+    - Circle of Competence
+    - Durable Moat
+    - Rational Management
+    - Financial Strength
+    - Margin of Safety (Discount to Intrinsic Value)
+    """),
+        HumanMessage(content=f"Please analyze {summary.ticker} and provide an investment signal.")
+    ]
+
+    while True:
+        response = llm_with_tools.invoke(messages)
+        messages.append(response)
+        
+        if not response.tool_calls:
+            break
+            
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            # Map tool names to functions
+            tool_map = {t.name: t for t in tools}
+            
+            if tool_name in tool_map:
+                try:
+                    # Execute the tool (no args needed as they are bound to summary)
+                    result = tool_map[tool_name].invoke({})
+                except Exception as e:
+                    result = f"Error executing {tool_name}: {e}"
+            else:
+                result = f"Unknown tool: {tool_name}"
+            
+            messages.append(ToolMessage(content=json.dumps(result), tool_call_id=tool_call["id"]))
+
+    # 3. Final Decision
+    # We use a structured output LLM to parse the final conversation into the signal format
     structured_llm = llm.with_structured_output(WarrenBuffettSignal)
-
-    system_instruction = SystemMessage(content="""You are a virtual Warren Buffett. Your goal is to evaluate a company based on value investing principles and provide a final investment signal.
-
-    Key Questions to Answer:
-    - Is the business understandable and within a circle of competence? (Assume yes).
-    - Does it have a durable competitive advantage (moat)?
-    - Is the management rational and shareholder-friendly?
-    - Is the company financially strong?
-    - Is the stock trading at a significant discount to its intrinsic value?
-
-    Instructions:
-    - Based strictly on the provided analysis data, determine a bullish, bearish, or neutral signal.
+    
+    final_instruction = HumanMessage(content="""Based on the analysis you performed above, determine a bullish, bearish, or neutral signal.
     - Assign a confidence score (0-100).
     - Provide a brief, decisive reasoning.""")
-            
-    user_content = HumanMessage(content=f"""Here is the quantitative analysis for {summary.ticker}:{json.dumps(analysis_results, indent=2)}
-    Please generate the investment signal now.""")
     
-    final_signal = structured_llm.invoke([system_instruction, user_content])
+    final_signal = structured_llm.invoke(messages + [final_instruction])
     
     return {summary.ticker: final_signal.model_dump()}
