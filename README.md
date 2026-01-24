@@ -105,6 +105,10 @@ This project utilizes also [MCP-USE](https://github.com/mcp-use/mcp-use) to faci
    FINANCIAL_DATASETS_API_KEY=your_financial_datasets_key_here
    BRAVE_API_KEY=your_brave_api_key_here
    ```
+5. Run the Agent
+   ```bash
+   python main.py
+   ```
 
 ## 💻 Usage 
 Run the main orchestrator script to start the interactive session:
