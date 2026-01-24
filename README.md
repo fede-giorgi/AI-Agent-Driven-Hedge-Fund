@@ -11,7 +11,7 @@
 > **Note on future-work and improvement areas:** We're aware that the trading simulation loop (where agents debate strategies) is currently manually capped at 10 iterations by design. However, in a real production environment, this could be improved by using a "gradient descent" logic or convergence thresholds to dynamically determine when the optimal strategy has been reached.
 
 ---
-> **🧱 What this project is about?**
+> **🧱 What is this project about?**
 
 An autonomous Multi-Agent System (MAS) designed to end-to-end automate an hedge fund. Unlike static algorithmic trading scripts, this system utilizes **LangChain** and **Google Gemini** (LLMs) to perform fundamental analysis and optimize the portfolio based on the famous Warren Buffett investment strategy.
 
