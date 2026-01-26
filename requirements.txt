@@ -4,4 +4,4 @@ langchain
 pydantic
 langchain-google-genai
 rich
-mcp
+mcp-use

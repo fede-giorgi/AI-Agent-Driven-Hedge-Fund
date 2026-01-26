@@ -1,4 +1,7 @@
 import json
+import os
+import re
+import importlib.metadata
 import sys
 import time
 import asyncio
@@ -10,15 +13,8 @@ from rich.markdown import Markdown
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-from ai_agents.research_agent import run_research_agent
-from ai_agents.warren_buffet_agent import warren_buffett_agent, get_research_brief
-from ai_agents.portfolio_and_risk_manager import run_portfolio_manager_agent
-from ai_agents.what_if_agent import run_what_if_agent
-from ai_agents.final_orchestrator_agent import run_final_orchestrator_agent, generate_ascii_chart
-from ai_agents.monitor import run_monitor_agent
 from models.tickers import TICKERS
 from models.financial_summary import FinancialSummary
-from tools.get_stock_prices import get_stock_prices
 
 console = Console()
 
@@ -26,6 +22,7 @@ def generate_portfolio_allocation(capital: float, trading_date: str = None):
     """
     Generates an initial portfolio allocation based on capital and stock prices.
     """
+    from tools.get_stock_prices import get_stock_prices
     console.print("Calculating initial allocation based on capital...", style="yellow")
     tickers = ["AAPL", "MSFT", "NVDA"]
     portfolio = {}
@@ -180,6 +177,35 @@ def get_backtesting_date():
                 console.print("Invalid date format. Please use YYYY-MM-DD.")
     return None
 
+def check_dependencies():
+    """Checks if libraries listed in requirements.txt are installed."""
+    req_path = "requirements.txt"
+    if not os.path.exists(req_path):
+        console.print(f"[yellow]Warning: {req_path} not found.[/yellow]")
+        return True
+
+    with open(req_path, "r") as f:
+        requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+    missing = []
+    for req in requirements:
+        # Extract package name, handling version specifiers
+        pkg_name = re.split(r"[<>=~!]", req)[0].strip()
+        try:
+            importlib.metadata.version(pkg_name)
+        except importlib.metadata.PackageNotFoundError:
+            missing.append(req)
+
+    if missing:
+        console.print("[bold red]Missing dependencies from requirements.txt:[/bold red]")
+        for lib in missing:
+            console.print(f"  - {lib}")
+        console.print("[bold red]Please install them using: pip install -r requirements.txt[/bold red]")
+        return False
+    else:
+        console.print("[green]All dependencies from requirements.txt are installed.[/green]")
+        return True
+
 def main():
     """
     Main function to run the financial agent.
@@ -200,6 +226,8 @@ def main():
     
     if debug_mode:
         console.print("[bold red]DEBUG MODE ENABLED[/bold red]")
+        if not check_dependencies():
+            sys.exit(1)
         capital = 10000
         risk_profile = 5
         backtesting_date = None
@@ -209,6 +237,15 @@ def main():
         portfolio = get_portfolio(capital)
         risk_profile = get_risk_profile()
         backtesting_date = get_backtesting_date()
+
+    # Import agents and tools here to allow dependency check to run first
+    from ai_agents.research_agent import run_research_agent
+    from ai_agents.warren_buffet_agent import warren_buffett_agent, get_research_brief
+    from ai_agents.portfolio_and_risk_manager import run_portfolio_manager_agent
+    from ai_agents.what_if_agent import run_what_if_agent
+    from ai_agents.final_orchestrator_agent import run_final_orchestrator_agent, generate_ascii_chart
+    from ai_agents.monitor import run_monitor_agent
+    from tools.get_stock_prices import get_stock_prices
 
     console.print("\n--- Starting Financial Analysis ---", style="bold green")
     

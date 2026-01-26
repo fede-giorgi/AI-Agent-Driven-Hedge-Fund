@@ -12,7 +12,7 @@ from tools.get_financials import get_financials
 from tools.get_metrics import get_metrics
 from tools.get_financial_line_items import get_financial_line_items
 from tools.get_stock_prices import get_stock_prices
-from tools.mcp_client import MCPClient
+from tools.mcp import MCPClient
 
 
 async def run_research_agent(
@@ -67,6 +67,7 @@ async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent
         # 1. Define the tools available to the agent
         tools = [get_financials, get_metrics, get_financial_line_items, get_stock_prices] + mcp_tools
         llm_with_tools = llm.bind_tools(tools)
+        tool_map = {t.name: t for t in tools}
 
         # Dynamically build prompt based on available tools
         search_tool_desc = ""
@@ -125,11 +126,11 @@ async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent
                 tool_name = tool_call["name"]
                 args = tool_call["args"]
                 
-                # Create a map for easy lookup
-                tool_map = {t.name: t for t in tools}
-                
                 # Circuit breaker for search tools to prevent infinite loops or excessive costs
                 if tool_name == "brave_news_search":
+                    if "goggles" not in args or args["goggles"] is None:
+                        args["goggles"] = []
+
                     if search_call_count >= 10:
                         print(f"  --> Skipping search tool call (limit reached): {tool_name}")
                         tool_result = {"error": "Max search limit (10) reached. Please proceed with the data you have."}
@@ -148,12 +149,7 @@ async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent
                         if tool_name in tool_map:
                             tool_instance = tool_map[tool_name]
                             
-                            # Check if the tool is async (MCP tools are async)
-                            if tool_instance.coroutine:
-                                tool_result = await tool_instance.ainvoke(args)
-                            else:
-                                # Fallback for sync tools (your existing tools)
-                                tool_result = tool_instance.invoke(args)
+                            tool_result = await tool_instance.ainvoke(args)
                             
                             if tool_name == "brave_news_search":
                                 print(f"  --> [MCP] Output for {tool_name}: {str(tool_result)[:1000]}...")
