@@ -2,7 +2,11 @@
 
 # 🤖 AI-Agent-Driven Hedge Fund
 
-![Logo](LOGO-AI-AGENT-HEDGE-FUND.png)
+<img src="LOGO-AI-AGENT-HEDGE-FUND.png" width="670" alt="Logo">
+
+
+
+
 
 <br>
 
