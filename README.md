@@ -1,9 +1,19 @@
-# 🤖 Autonomous AI-Driven Financial Agent Architecture
+<div align="center">
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Python](https://img.shields.io/badge/Python-3.14%2B-blue)
-![LangChain](https://img.shields.io/badge/Framework-LangChain-green)
-![MCP](https://img.shields.io/badge/Protocol-MCP-orange)
+# 🤖 AI-Agent-Driven Hedge Fund
+
+![Logo](LOGO-AI-AGENT-HEDGE-FUND.png)
+
+<br>
+
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.14%2B-blue?style=for-the-badge&logo=python&logoColor=white)
+![LangChain](https://img.shields.io/badge/Framework-LangChain-green?style=for-the-badge)
+![MCP](https://img.shields.io/badge/Protocol-MCP-orange?style=for-the-badge)
+
+</div>
+
+---
 
 > **🎓 Educational Project Disclaimer**
 > This project is designed to demonstrate how autonomous AI agents can communicate, exchange information, and interact collaboratively.
@@ -78,7 +88,7 @@ graph TD
 
 ## 🔌 MCP-USE Integration
 
-This project utilizes also [MCP-USE](https://github.com/mcp-use/mcp-use) to facilitate the integration of Model Context Protocol (MCP) servers. This allows the agents to securely and efficiently access external tools, such as the Brave Search MCP, leveraged in this case to fetch the latest news related to the ticker. 
+This project utilizes also [Manufact (formerly MCP-USE)](https://www.manufact.com/) to facilitate the integration of Model Context Protocol (MCP) servers. This allows the agents to securely and efficiently access external tools, such as the Brave Search MCP, leveraged in this case to fetch the latest news related to the ticker. 
 
 ## 🦥 Installation
 1. Clone the RepositoryBash
@@ -93,7 +103,7 @@ This project utilizes also [MCP-USE](https://github.com/mcp-use/mcp-use) to faci
     ```
 3. Install Dependencies
    ``` bash
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
 4. Configure Environment Variables You need API keys for Google Gemini and Financial Datasets. Rename the example environment file and edit it:
    ```bash
@@ -109,6 +119,10 @@ This project utilizes also [MCP-USE](https://github.com/mcp-use/mcp-use) to faci
    ```bash
    python main.py
    ```
+5. **Optional:** Run in debug mode to skip manual input entry and use default parameters for testing:
+   ```bash
+   python main.py --debug
+   ```
 
 ## 💻 Usage 
 Run the main orchestrator script to start the interactive session:
@@ -122,6 +136,16 @@ Interaction required by the user:
 - Ticker Selection: Choose to analyze a specific subset (e.g., AAPL, NVDA) or a list of tickers.
 - Execution: Watch the agents collaborate real-time on the console.
 - Result: The system outputs a final portfolio allocation table and a detailed report of the decisions.
+
+## 🐞 Debug Mode
+
+To facilitate rapid development and testing, we have implemented a `--debug` mode. This allows developers to run the agent without manually entering parameters (capital, portfolio, risk profile, tickers) every time.
+
+When running in debug mode, the system uses default hardcoded values:
+- Capital: $10,000
+- Risk Profile: 5 (Balanced)
+- Tickers: AAPL, MSFT, NVDA
+- Backtesting: Disabled
 
 ## 👥 Contributors
 - Luca Barattini
