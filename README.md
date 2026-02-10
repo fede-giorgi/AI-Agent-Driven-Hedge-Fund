@@ -140,8 +140,10 @@ Interaction required by the user:
 ## 📸 Screenshots & Demo
 
 ### Demo Run
-<img src="/utils/Final Orchestrator Agent.png" width="48%"> <img src="/utils/Research Agent.png" width="48%">
-<img src="/utils/Warren Buffet Signal.png" width="48%"> <img src="/utils/WHAT-IF Agent.png" width="48%">
+<img src="/utils/Final Orchestrator Agent.png"> 
+<img src="/utils/Research Agent.png">
+<img src="/utils/Warren Buffet Signal.png">
+<img src="/utils/WHAT-IF Agent.png">
 
 ## 🐞 Debug Mode
 
