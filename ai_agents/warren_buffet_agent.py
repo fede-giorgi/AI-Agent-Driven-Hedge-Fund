@@ -7,7 +7,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 import math
 import json
 
-from models.financial_summary import FinancialSummary, WarrenBuffettSignal
+from classes.financial_summary import FinancialSummary, WarrenBuffettSignal
 from llm import get_llm
 
 from tools.analyze_book_value_growth import analyze_book_value_growth

@@ -3,11 +3,7 @@
 # 🤖 AI-Agent-Driven Hedge Fund
 
 <img src="LOGO-AI-AGENT-HEDGE-FUND.png" width="670" alt="Logo">
-
-
-
-
-
+<br>
 <br>
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
@@ -141,7 +137,13 @@ Interaction required by the user:
 - Execution: Watch the agents collaborate real-time on the console.
 - Result: The system outputs a final portfolio allocation table and a detailed report of the decisions.
 
-## 🐞 Debug Mode
+## 📸 Screenshots & Demo
+
+### Demo Run
+<img src="/utils/Final Orchestrator Agent.png" width="48%"> <img src="/utils/Research Agent.png" width="48%">
+<img src="/utils/Warren Buffet Signal.png" width="48%"> <img src="/utils/WHAT-IF Agent.png" width="48%">
+
+## � Debug Mode
 
 To facilitate rapid development and testing, we have implemented a `--debug` mode. This allows developers to run the agent without manually entering parameters (capital, portfolio, risk profile, tickers) every time.
 

@@ -1,6 +1,6 @@
 import json
 from typing import Dict, List, Union, Tuple
-from models.financial_summary import FinancialSummary
+from classes.financial_summary import FinancialSummary
 from langchain_core.messages import SystemMessage, HumanMessage
 from llm import get_llm
 

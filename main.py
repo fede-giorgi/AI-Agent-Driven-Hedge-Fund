@@ -13,8 +13,8 @@ from rich.markdown import Markdown
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-from models.tickers import TICKERS
-from models.financial_summary import FinancialSummary
+from classes.tickers import TICKERS
+from classes.financial_summary import FinancialSummary
 
 console = Console()
 

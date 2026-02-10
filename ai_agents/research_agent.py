@@ -7,7 +7,7 @@ import os
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
 from llm import get_llm
-from models.financial_summary import FinancialSummary, ToolStatus, Error, Result, ResearchAgentOutput
+from classes.financial_summary import FinancialSummary, ToolStatus, Error, Result, ResearchAgentOutput
 from tools.get_financials import get_financials
 from tools.get_metrics import get_metrics
 from tools.get_financial_line_items import get_financial_line_items

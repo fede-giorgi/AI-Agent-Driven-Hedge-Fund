@@ -1,5 +1,5 @@
 from langchain.tools import tool
-from models.financial_summary import FinancialSummary, WarrenBuffettSignal
+from classes.financial_summary import FinancialSummary, WarrenBuffettSignal
 import math
 import json
 
