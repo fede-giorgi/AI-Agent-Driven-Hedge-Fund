@@ -2,7 +2,7 @@
 
 # 🤖 AI-Agent-Driven Hedge Fund
 
-<img src="LOGO-AI-AGENT-HEDGE-FUND.png" width="670" alt="Logo">
+<img src="/utils/LOGO-AI-AGENT-HEDGE-FUND.png" width="670" alt="Logo">
 <br>
 <br>
 
@@ -80,7 +80,7 @@ graph TD
 - Guardrails: A Monitor Agent acts as a compliance officer, ensuring no logical errors (e.g. negative cash) occur during the simulation.
 - Trading Simulator: A "What-If" agent simulates the execution of trades to project portfolio state over multiple iterations.
 
-## 🛠️ Tech StackFramework: 
+## 🛠️ Tech Stack
 - LangChain (Python)
 - LLM: Google Gemini (gemini-2.5-flash) via langchain-google-genai
 - Data Source: Financial Datasets API
@@ -91,7 +91,7 @@ graph TD
 This project utilizes also [Manufact (formerly MCP-USE)](https://www.manufact.com/) to facilitate the integration of Model Context Protocol (MCP) servers. This allows the agents to securely and efficiently access external tools, such as the Brave Search MCP, leveraged in this case to fetch the latest news related to the ticker. 
 
 ## 🦥 Installation
-1. Clone the RepositoryBash
+1. Clone the Repository
      ```bash
    git clone https://github.com/fede-giorgi/ai-agent.git
     cd ai-agent
@@ -119,7 +119,7 @@ This project utilizes also [Manufact (formerly MCP-USE)](https://www.manufact.co
    ```bash
    python main.py
    ```
-5. **Optional:** Run in debug mode to skip manual input entry and use default parameters for testing:
+6. **Optional:** Run in debug mode to skip manual input entry and use default parameters for testing:
    ```bash
    python main.py --debug
    ```
@@ -143,7 +143,7 @@ Interaction required by the user:
 <img src="/utils/Final Orchestrator Agent.png" width="48%"> <img src="/utils/Research Agent.png" width="48%">
 <img src="/utils/Warren Buffet Signal.png" width="48%"> <img src="/utils/WHAT-IF Agent.png" width="48%">
 
-## � Debug Mode
+## 🐞 Debug Mode
 
 To facilitate rapid development and testing, we have implemented a `--debug` mode. This allows developers to run the agent without manually entering parameters (capital, portfolio, risk profile, tickers) every time.
 
