@@ -1,6 +1,8 @@
 # Ignore environment variables
 .env
 
+caude.md
+
 # Python compiled files
 __pycache__/
 *.pyc
