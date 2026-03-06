@@ -5,6 +5,13 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from rich.console import Console
 from rich.table import Table
 
+
+def _text(content) -> str:
+    """Return plain text from an LLM response content (handles str or list of blocks)."""
+    if isinstance(content, list):
+        return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+    return content if isinstance(content, str) else str(content)
+
 def run_final_orchestrator_agent(
     initial_portfolio: Dict[str, int],
     initial_capital: float,
@@ -52,7 +59,7 @@ def run_final_orchestrator_agent(
     
     response = llm.invoke([system_message, human_message])
     try:
-        content = response.content.strip()
+        content = _text(response.content).strip()
         if content.startswith("```json"):
             content = content[7:]
         if content.endswith("```"):

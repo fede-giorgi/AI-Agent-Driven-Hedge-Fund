@@ -8,12 +8,29 @@ load_dotenv()
 FINDAT_API_KEY = os.getenv("FINDAT_API_KEY")
 
 @tool(description="Get financial data for a given ticker symbol")
-def get_financials(ticker: str, 
-                   period: str = 'annual', 
-                   limit: int = 10, 
+def get_financials(ticker: str,
+                   period: str = 'annual',
+                   limit: int = 10,
                    end_date: str = None
                    ) -> dict:
+    """
+    Fetches income statement, balance sheet, and cash flow statements for a ticker.
 
+    Returns up to `limit` reporting periods of combined financial statements.
+    When `end_date` is provided, only periods on or before that date are returned,
+    enabling point-in-time backtesting.
+
+    Args:
+        ticker: Stock ticker symbol (e.g. "AAPL").
+        period: Reporting period — "annual", "quarterly", or "ttm". Defaults to "annual".
+        limit: Maximum number of periods to return. Defaults to 10.
+        end_date: Optional cutoff date (YYYY-MM-DD); filters to periods ≤ this date.
+
+    Returns:
+        dict with keys ``income_statements``, ``balance_sheets``, and
+        ``cash_flow_statements``, each containing a list of period dicts.
+        Returns ``{"error": ...}`` on API failure.
+    """
     # check if API key is set
     if not FINDAT_API_KEY:
         raise ValueError(

@@ -1,5 +1,12 @@
 import json
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Union, Tuple, Any
+
+
+def _text(content) -> str:
+    """Return plain text from an LLM response content (handles str or list of blocks)."""
+    if isinstance(content, list):
+        return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+    return content if isinstance(content, str) else str(content)
 from classes.financial_summary import FinancialSummary
 from langchain_core.messages import SystemMessage, HumanMessage
 from llm import get_llm
@@ -14,7 +21,26 @@ def run_monitor_agent(
     history: List[Dict[str, Any]] = None # Added history for standardization
     ) -> dict:
     """
-    Runs the Monitor Agent to validate the proposed configuration.
+    Runs the Monitor Agent to validate proposed trades against hard constraints.
+
+    Checks performed (all must pass):
+    - Schema: each trade has action in {buy, sell}, a valid ticker string, and shares > 0.
+    - Known ticker + positive price: ticker must exist in price_map.
+    - Holdings: sell quantity may not exceed current_portfolio[ticker].
+    - Budget: buy_cost − sell_proceeds must not exceed available_capital.
+
+    Args:
+        proposed_trades: List of trade dicts with action, ticker, and shares keys.
+        current_portfolio: Dict of ticker → current share count.
+        available_capital: Cash available for buys.
+        price_map: Dict of ticker → current price.
+        current_iteration: Current loop iteration number (1-based).
+        total_iterations: Total number of loop iterations.
+        history: Previous iteration dicts (unused by monitor, kept for API consistency).
+
+    Returns:
+        dict with keys ``agent``, ``is_valid`` (bool), ``summary`` (cash flows),
+        ``violations`` (list), and ``notes`` (list).
     """
     llm = get_llm()
 
@@ -61,7 +87,7 @@ def run_monitor_agent(
     
     response = llm.invoke([system_instruction, user_content])
     try:
-        content = response.content.strip()
+        content = _text(response.content).strip()
         if content.startswith("```json"):
             content = content[7:]
         if content.endswith("```"):

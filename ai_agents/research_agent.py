@@ -1,8 +1,5 @@
 import json
-from pydantic import BaseModel, Field
-import asyncio
 from typing import List, Dict, Any
-import os
 
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
@@ -12,181 +9,196 @@ from tools.get_financials import get_financials
 from tools.get_metrics import get_metrics
 from tools.get_financial_line_items import get_financial_line_items
 from tools.get_stock_prices import get_stock_prices
-from tools.mcp import MCPClient
+from tools.get_company_news import get_company_news
+from tools.get_segmented_revenues import get_segmented_revenues
+from tools.get_insider_trades import get_insider_trades
+from tools.get_analyst_estimates import get_analyst_estimates
+
+
+# All tools available to the research agent
+_ALL_TOOLS = [
+    get_financials,
+    get_metrics,
+    get_financial_line_items,
+    get_stock_prices,
+    get_company_news,
+    get_segmented_revenues,
+    get_insider_trades,
+    get_analyst_estimates,
+]
+
+# Tools that should only be called once per ticker (prevent redundant API calls)
+_SINGLE_CALL_TOOLS = {t.name for t in _ALL_TOOLS}
 
 
 async def run_research_agent(
         tickers: List[str],
         research_config: Dict[str, Any],
-        backtesting_date: str = None
-        ) -> ResearchAgentOutput:
+        backtesting_date: str = None,
+) -> ResearchAgentOutput:
     """
     Runs the research agent to gather and structure financial data for a list of tickers.
+
+    For each ticker the agent runs a tool-calling loop (financial data + news +
+    segmented revenues + insider trades + analyst estimates), then uses a
+    structured-output LLM call to compile all data into a Result model.
+
+    All data comes directly from FinancialDatasets.ai — no third-party MCP
+    server or Brave Search required.
+
+    Args:
+        tickers: List of ticker symbols to research.
+        research_config: Dict produced by get_research_brief() with focus_areas,
+                         required_metrics, required_line_items, and search_queries.
+        backtesting_date: Optional date string (YYYY-MM-DD). When provided, all
+                          tool calls use this as the end_date.
+
+    Returns:
+        A ResearchAgentOutput with a Result per ticker.
     """
     llm = get_llm()
     structured_llm = llm.with_structured_output(Result)
-
     agent_output = ResearchAgentOutput(requested_tickers=tickers)
 
-    if not os.getenv("BRAVE_API_KEY"):
-        print("WARNING: BRAVE_API_KEY not found in environment variables. Brave Search tools will likely fail.")
-
-    mcp_client = MCPClient(
-        command="npx", 
-        args=["-y", "@brave/brave-search-mcp-server@latest", "--enabled-tools", "brave_news_search"]
-    )
-    
-    # We use 'async with' to manage the server process lifecycle
-    # If connection fails (e.g. no API key), we proceed with standard tools only.
-    mcp_tools = []
-    try:
-        async with mcp_client as client:
-            all_mcp_tools = await client.get_tools()
-            print(f"All available MCP tools: {[t.name for t in all_mcp_tools]}")
-            
-            # Filter to allow only brave_news_search as requested
-            mcp_tools = [t for t in all_mcp_tools if t.name == "brave_news_search"]
-            
-            if not mcp_tools and all_mcp_tools:
-                print("Warning: 'brave_news_search' not found in available tools.")
-                
-            await _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output, mcp_tools, research_config)
-    except Exception as e:
-        print(f"MCP Connection Failed (proceeding without web search): {e}")
-        # Fallback: Run without MCP tools
-        await _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output, [], research_config)
-
+    await _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output, research_config)
     return agent_output
 
-async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output, mcp_tools, research_config):
-    """Helper function to process tickers with a given set of tools."""
-    
+
+async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output, research_config):
+    """
+    Processes each ticker sequentially: runs the data-gathering tool loop, then
+    compiles a structured Result via a final structured-output LLM call.
+
+    Args:
+        tickers: Ticker symbols to process.
+        backtesting_date: Optional end-date string for all tool calls.
+        llm: Base LLM instance for the agentic loop.
+        structured_llm: LLM bound to the Result output schema.
+        agent_output: Mutable ResearchAgentOutput to append results/errors into.
+        research_config: Research brief dict.
+    """
     for ticker in tickers:
-        print(f"Researching {ticker}...")
-        
-        # 1. Define the tools available to the agent
-        tools = [get_financials, get_metrics, get_financial_line_items, get_stock_prices] + mcp_tools
+        print(f"\nResearching {ticker}...")
+
+        tools = _ALL_TOOLS
         llm_with_tools = llm.bind_tools(tools)
         tool_map = {t.name: t for t in tools}
 
-        # Dynamically build prompt based on available tools
-        search_tool_desc = ""
-        search_instruction = ""
-        
-        # Check if brave_news_search is actually available in the passed mcp_tools
-        if any(t.name == "brave_news_search" for t in mcp_tools):
-            search_tool_desc = f'- `brave_news_search`: News search. Use this tool to investigate qualitative aspects related to the focus areas, specifically looking for information on: {json.dumps(research_config.get("search_queries", []))}.'
-            search_instruction = "4. Use `brave_news_search` to find qualitative data (news, sentiment) to complement the quantitative data."
-        
+        date_instruction = f"Pass `end_date='{backtesting_date}'` to all tools." if backtesting_date else ""
 
-        # 2. Initialize conversation history with a directive System Message
         messages = [
-            SystemMessage(content=f"""You are a Research Agent. Your goal is to gather financial data for the ticker '{ticker}' to populate a `FinancialSummary`.
-            
-            You have been given a specific RESEARCH BRIEF. Focus your efforts on these areas:
-            {json.dumps(research_config.get('focus_areas', []), indent=2)}
+            SystemMessage(content=f"""You are a Research Agent. Your goal is to gather comprehensive financial data
+for '{ticker}' to populate a FinancialSummary.
 
-            You have access to a suite of financial tools and search capabilities.
-            
-            Tools available:
-            - `get_financials`: Income statement, balance sheet, cash flow.
-            - `get_metrics`: Key ratios and metrics. Prioritize fetching: {json.dumps(research_config.get('required_metrics', []))}
-            - `get_financial_line_items`: Specific line items. You MUST fetch these: {json.dumps(research_config.get('required_line_items', []))}
-            - `get_stock_prices`: Price history.
-            {search_tool_desc}
+RESEARCH BRIEF — focus areas:
+{json.dumps(research_config.get('focus_areas', []), indent=2)}
 
-            Instructions:
-            1. Always fetch the current stock price using `get_stock_prices`.
-            2. Decide which other tools are necessary to fulfill the RESEARCH BRIEF.
-            2. If a tool fails, use your judgment to retry or find alternative data sources.
-            3. Ensure you pass `end_date='{backtesting_date}'` to all tools if a backtesting date is provided.
-            {search_instruction}
-            5. Avoid redundant calls.
-            6. Stop when you have sufficient information to satisfy the brief.
-            """),
-            HumanMessage(content=f"Start research for {ticker}.")
+TOOLS AVAILABLE:
+- `get_financials`            — income statement, balance sheet, cash flow
+- `get_metrics`               — 50+ ratios; prioritise: {json.dumps(research_config.get('required_metrics', []))}
+- `get_financial_line_items`  — granular line items (call with limit=8 for 8 years of history);
+                                 MUST fetch: {json.dumps(research_config.get('required_line_items', []))}
+- `get_stock_prices`          — OHLCV history (fetch current price)
+- `get_company_news`          — recent news headlines from FinancialDatasets.ai
+- `get_segmented_revenues`    — business-segment / geographic revenue breakdown
+- `get_insider_trades`        — recent Form 4 insider buy/sell filings
+- `get_analyst_estimates`     — Wall Street consensus revenue & EPS estimates
+
+INSTRUCTIONS:
+1. Call `get_stock_prices` to fetch current price.
+2. Call `get_financial_line_items` with limit=8 to get 8 years of multi-period history.
+3. Call `get_metrics`, `get_financials` for ratios and statements.
+4. Call `get_company_news` for qualitative context.
+5. Call `get_segmented_revenues` to understand revenue mix.
+6. Call `get_insider_trades` (limit=20) to assess insider sentiment.
+7. Call `get_analyst_estimates` for forward consensus.
+8. {date_instruction}
+9. Each tool should be called at most once. Stop when all tools have been called.
+"""),
+            HumanMessage(content=f"Start research for {ticker}."),
         ]
 
-        # 3. Agent Loop (Reasoning + Acting)
-        # Track tools to prevent redundant calls
-        tools_called_successfully = set()
-        search_call_count = 0
-        
+        tools_called = set()
+
         while True:
-            # Use ainvoke for async support (needed for MCP tools)
             response = await llm_with_tools.ainvoke(messages)
             messages.append(response)
 
-            # If the LLM didn't make any tool calls, we are done gathering data
             if not response.tool_calls:
                 break
-            
-            # Execute the tool calls
+
             for tool_call in response.tool_calls:
                 tool_name = tool_call["name"]
                 args = tool_call["args"]
-                
-                # Circuit breaker for search tools to prevent infinite loops or excessive costs
-                if tool_name == "brave_news_search":
-                    if "goggles" not in args or args["goggles"] is None:
-                        args["goggles"] = []
 
-                    if search_call_count >= 10:
-                        print(f"  --> Skipping search tool call (limit reached): {tool_name}")
-                        tool_result = {"error": "Max search limit (10) reached. Please proceed with the data you have."}
-                        messages.append(ToolMessage(content=json.dumps(tool_result), tool_call_id=tool_call["id"]))
-                        continue
-                    else:
-                        search_call_count += 1
-
-                # Prevent redundant calls for financial tools
-                if tool_name in ["get_financials", "get_metrics", "get_financial_line_items", "get_stock_prices"] and tool_name in tools_called_successfully:
-                    print(f"  --> Skipping redundant tool call: {tool_name}")
-                    tool_result = {"error": f"Tool '{tool_name}' was already called successfully. Do not call it again."}
+                if tool_name in _SINGLE_CALL_TOOLS and tool_name in tools_called:
+                    print(f"  --> Skipping redundant call: {tool_name}")
+                    tool_result = {"error": f"'{tool_name}' already called. Do not call again."}
                 else:
-                    print(f"  --> Agent calling tool: {tool_name} (Args: {json.dumps(args)})")
+                    print(f"  --> Calling: {tool_name}  args={json.dumps(args)}")
                     try:
-                        if tool_name in tool_map:
-                            tool_instance = tool_map[tool_name]
-                            
-                            tool_result = await tool_instance.ainvoke(args)
-                            
-                            if tool_name == "brave_news_search":
-                                print(f"  --> [MCP] Output for {tool_name}: {str(tool_result)[:1000]}...")
-                            
-                            # Mark as successful if no error in result
-                            if isinstance(tool_result, dict) and "error" in tool_result:
-                                pass 
-                            else:
-                                tools_called_successfully.add(tool_name)
-                        else:
-                            tool_result = {"error": f"Unknown tool: {tool_name}"}
+                        tool_result = await tool_map[tool_name].ainvoke(args) if tool_name in tool_map \
+                            else {"error": f"Unknown tool: {tool_name}"}
+                        if isinstance(tool_result, dict) and "error" not in tool_result:
+                            tools_called.add(tool_name)
                     except Exception as e:
                         tool_result = {"error": str(e)}
-                
+
                 messages.append(ToolMessage(content=json.dumps(tool_result), tool_call_id=tool_call["id"]))
 
+        # --- Structured compilation ---
         try:
-            # 4. Final Structuring: Ask the LLM to compile the conversation history into the Result model
-            system_message = SystemMessage(content="""You are a Data Structuring Expert. Your task is to parse the conversation history and populate the `Result` model.
-            
-            Guidelines:
-            - Extract financial data from the tool outputs to populate the `financial_summary` field.
-            - Use your best judgment to map data to the correct fields. If a field is missing, use null.
-            - Extract the latest closing price for the `price` field.
-            - Place any additional interesting data or context in `extra_fields`.
-            - Note any data quality issues or tool failures in `data_quality_notes` or `tool_status`.
-            - If news data was gathered via search, summarize it in `extra_fields` under a 'news_related_to_the_ticker' key.
-            - Ensure numeric values are formatted correctly (no NaN/Infinity).
-            - Output valid JSON matching the `Result` model.
-            """)
-            
-            # We pass the entire history of tool calls and results to the structured LLM
-            final_messages = [system_message] + messages
-            result = structured_llm.invoke(final_messages)
-            
+            system_message = SystemMessage(content="""You are a Data Structuring Expert. Parse the conversation history
+and populate the `Result` model precisely.
+
+STANDARD FIELDS:
+- Extract all financial ratios, line items, and price from tool outputs.
+- Use null for any missing field; never use NaN or Infinity.
+- Set `price` to the latest closing price from get_stock_prices.
+
+HISTORICAL ARRAYS (most-recent first, up to 8 entries):
+- historical_net_income            ← net_income from each get_financial_line_items period
+- historical_revenue               ← revenue from each period
+- historical_gross_profit          ← gross_profit from each period
+- historical_return_on_equity      ← return_on_equity from financial_metrics periods
+- historical_operating_margin      ← operating_margin from financial_metrics periods
+- historical_shareholders_equity   ← shareholders_equity from each period
+- historical_outstanding_shares    ← outstanding_shares from each period
+- historical_issuance_or_purchase_of_equity_shares ← from each period
+
+NEWS:
+- recent_news: format as a readable multi-line string from get_company_news results,
+  e.g. "[2025-01-15] Headline (Source)\\n[2025-01-10] Headline (Source)"
+  Set tool_status.get_company_news = "ok" if news was successfully fetched.
+
+SEGMENTED REVENUES:
+- segmented_revenue: extract the most-recent period's segment breakdown as a flat dict
+  {segment_name: amount}, e.g. {"iPhone": 200.58e9, "Services": 85.2e9}.
+  Use the `segments` sub-dict from get_segmented_revenues items.
+  Set tool_status.get_segmented_revenues = "ok" if fetched.
+
+INSIDER TRADES:
+- net_insider_buying: sum of all transaction_value fields (positive = net buying).
+- insider_buy_count: count of transactions where transaction_value > 0.
+- insider_sell_count: count of transactions where transaction_value < 0.
+  Set tool_status.get_insider_trades = "ok" if fetched.
+
+ANALYST ESTIMATES:
+- analyst_revenue_estimate: revenue from the first (most-forward) annual estimate.
+- analyst_eps_estimate: earnings_per_share from the first annual estimate.
+- analyst_estimate_period: fiscal_period of that estimate (e.g. "FY2026").
+  Set tool_status.get_analyst_estimates = "ok" if fetched.
+
+TOOL STATUS:
+- Set get_financials / get_metrics / get_financial_line_items / get_stock_prices
+  to "ok" or "error" based on whether the tool succeeded.
+
+Output valid JSON matching the Result model.
+""")
+            result = structured_llm.invoke([system_message] + messages)
             agent_output.results.append(result)
-            print(f"Research result for {ticker}: {result.model_dump_json(indent=2)}")
-            
+            print(f"  ✓ {ticker} structured successfully.")
+
         except Exception as e:
             agent_output.errors.append(Error(tool="processing_chain", message=str(e), ticker=ticker))
+            print(f"  ✗ {ticker} structuring failed: {e}")

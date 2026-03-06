@@ -3,5 +3,7 @@ python-dotenv
 langchain
 pydantic
 langchain-google-genai
+langchain-anthropic
 rich
-mcp-use
+scikit-learn
+numpy

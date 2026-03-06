@@ -3,6 +3,13 @@ from typing import Dict, List, Any
 from llm import get_llm
 from langchain_core.messages import SystemMessage, HumanMessage
 
+
+def _text(content) -> str:
+    """Return plain text from an LLM response content (handles str or list of blocks)."""
+    if isinstance(content, list):
+        return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+    return content if isinstance(content, str) else str(content)
+
 def run_portfolio_manager_agent(
     current_portfolio: Dict[str, int],
     available_capital: float,
@@ -84,7 +91,7 @@ def run_portfolio_manager_agent(
     response = llm.invoke([system_message, human_message])
     try:
         # Clean up potential markdown code blocks
-        content = response.content.strip()
+        content = _text(response.content).strip()
         if content.startswith("```json"):
             content = content[7:]
         if content.endswith("```"):

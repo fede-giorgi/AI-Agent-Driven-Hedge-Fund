@@ -77,7 +77,20 @@ def get_research_brief():
 
 def warren_buffett_agent(summary: FinancialSummary) -> dict:
     """
-    Runs the Warren Buffett agent to analyze a stock.
+    Runs the Warren Buffett analysis agent for a single ticker.
+
+    The agent runs a tool-calling loop using seven domain analysis tools
+    (fundamentals, consistency, moat, management quality, book value growth,
+    intrinsic value DCF, pricing power).  After the loop completes, a
+    structured-output LLM call converts the conversation into a
+    WarrenBuffettSignal with signal (bullish/bearish/neutral), confidence (0-100),
+    and reasoning.
+
+    Args:
+        summary: A fully-populated FinancialSummary for the ticker to analyse.
+
+    Returns:
+        dict mapping ``{ticker: WarrenBuffettSignal.model_dump()}``.
     """
     print(f"Analyzing {summary.ticker} with Warren Buffett agent...")
     

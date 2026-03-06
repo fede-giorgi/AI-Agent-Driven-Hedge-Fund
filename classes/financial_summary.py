@@ -62,11 +62,42 @@ class FinancialSummary(BaseModel):
     current_assets: Optional[float] = None
     current_liabilities: Optional[float] = None
 
+    # Historical time-series (most recent first) for multi-period analysis
+    historical_net_income: Optional[List[float]] = None
+    historical_revenue: Optional[List[float]] = None
+    historical_gross_profit: Optional[List[float]] = None
+    historical_return_on_equity: Optional[List[float]] = None
+    historical_operating_margin: Optional[List[float]] = None
+    historical_shareholders_equity: Optional[List[float]] = None
+    historical_outstanding_shares: Optional[List[float]] = None
+    historical_issuance_or_purchase_of_equity_shares: Optional[List[float]] = None
+
+    # News summary from FinancialDatasets.ai company news endpoint
+    recent_news: Optional[str] = None
+
+    # Segmented revenues — most recent period's business-segment breakdown
+    # e.g. {"iPhone": 200.5e9, "Services": 85.2e9, ...}
+    segmented_revenue: Optional[dict] = None
+
+    # Insider trading signals — derived from recent Form 4 filings
+    net_insider_buying: Optional[float] = None   # positive = net $ bought, negative = net $ sold
+    insider_buy_count: Optional[int] = None      # # of distinct buy transactions
+    insider_sell_count: Optional[int] = None     # # of distinct sell transactions
+
+    # Analyst consensus estimates (latest annual period)
+    analyst_revenue_estimate: Optional[float] = None
+    analyst_eps_estimate: Optional[float] = None
+    analyst_estimate_period: Optional[str] = None
+
 class ToolStatus(BaseModel):
     get_financials: Literal["ok", "error"]
     get_metrics: Literal["ok", "error"]
     get_financial_line_items: Literal["ok", "error"]
     get_stock_prices: Literal["ok", "error"]
+    get_company_news: Literal["ok", "error", "skipped"] = "skipped"
+    get_segmented_revenues: Literal["ok", "error", "skipped"] = "skipped"
+    get_insider_trades: Literal["ok", "error", "skipped"] = "skipped"
+    get_analyst_estimates: Literal["ok", "error", "skipped"] = "skipped"
 
 class Error(BaseModel):
     tool: str
