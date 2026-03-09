@@ -14,7 +14,7 @@
 
 ---
 
-> 🎓 **Educational Project**
+> 🎓 **Educational Project Disclaimer**
 >
 > This project was built to understand how to fully leverage LangChain in a real environment and make agents interact with each other meaningfully. We learnt a lot, broke a lot, and that's what matters.
 >
@@ -28,7 +28,7 @@ An autonomous Multi-Agent System (MAS) that simulates a hedge fund end-to-end. A
 
 ## 🎬 Demo
 
-![Demo](demo.gif)
+![Demo](/utils/demo.gif)
 
 ---
 
@@ -36,7 +36,7 @@ An autonomous Multi-Agent System (MAS) that simulates a hedge fund end-to-end. A
 
 The pipeline is strictly sequential. Each stage produces an output that becomes the next stage's input as outlined in this flowchart.
 
-<img src="/utils/Flowchart.png">
+<img src="/utils/Flowchart.png" height="670">
 
 ---
 
