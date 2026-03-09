@@ -32,41 +32,7 @@ An autonomous Multi-Agent System (MAS) that simulates a hedge fund end-to-end. A
 ## System Architecture
 
 The pipeline is strictly sequential. Each stage produces a typed output that becomes the next stage's input.
-
-```mermaid
-graph TD
-    User([User Config\nRisk · Capital · LLM · Tickers])
-    FinDat[(FinancialDatasets.ai\n8 endpoints)]
-
-    Research[Research Agent\nAsync data collection]
-    Buffett[Warren Buffett Agent\n8 domain tools → Signal]
-
-    subgraph "Trading Loop (10 iter · 3 in debug)"
-        direction TB
-        PM[Portfolio Manager\nPropose trades]
-        Monitor[Monitor Agent\nValidate constraints]
-        WhatIf[What-If Agent\nDevil's advocate]
-    end
-
-    Summary[Iteration Summary\nDisplay-only compression]
-    Final[Final Orchestrator\nSelects optimal plan]
-    Output([Final Portfolio + Backtesting])
-
-    User --> Research
-    FinDat --> Research
-    Research -- "FinancialSummary" --> Buffett
-    Buffett -- "Signal + Confidence" --> PM
-
-    PM -- "Proposed Trades" --> Monitor
-    Monitor -- "Validated Trades" --> WhatIf
-    WhatIf -.->|"Counter-Proposal"| PM
-
-    PM & WhatIf --> Summary
-    Summary -. "display only" .-> Final
-    PM & WhatIf -- "full history" --> Final
-    Final --> Output
-```
-
+<img src="/utils/Research Agent.png">
 > The iteration summary (compressed debate history) is shown to the user as a readable panel but **not** fed to the Final Orchestrator — which always receives the full raw history for highest-quality decisions.
 
 ---
