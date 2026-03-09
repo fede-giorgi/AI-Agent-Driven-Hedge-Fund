@@ -14,16 +14,19 @@
 
 ---
 
-> **Educational Project**
-> This project demonstrates how autonomous AI agents can communicate, exchange information, and collaborate to make financial decisions. It is not intended for real trading.
+> 🎓 **Educational Project**
+>
+> This project was built to understand how to fully leverage LangChain in a real environment and make agents interact with each other meaningfully. We learnt a lot, broke a lot, and that's what matters.
+>
+> Two known limitations we are aware of: the fixed-iteration trading loop could be replaced by a convergence threshold (descent-style stopping); and the backtesting is a single-point snapshot rather than a proper walk-forward test. A walk-forward approach would re-run the full pipeline at multiple historical dates, track equity curves over time, and compute risk-adjusted metrics like Sharpe ratio and max drawdown, significant LLM cost and execution time make that out of scope here.
 
 ---
 
-An autonomous Multi-Agent System (MAS) that simulates a hedge fund end-to-end. Agents handle data collection, value analysis, trade proposal, compliance validation, and final decision — all orchestrated sequentially via **LangChain** with either **Google Gemini** or **Anthropic Claude**.
+An autonomous Multi-Agent System (MAS) that simulates a hedge fund end-to-end. Agents handle data collection, value analysis, trade proposal, compliance validation, and final decision, all orchestrated sequentially via **LangChain** with either **Google Gemini** or **Anthropic Claude**.
 
 ---
 
-## Demo
+## 🎬 Demo
 
 ![Demo](demo.gif)
 
@@ -31,19 +34,21 @@ An autonomous Multi-Agent System (MAS) that simulates a hedge fund end-to-end. A
 
 ## System Architecture
 
-The pipeline is strictly sequential. Each stage produces a typed output that becomes the next stage's input.
-<img src="/utils/Research Agent.png">
-> The iteration summary (compressed debate history) is shown to the user as a readable panel but **not** fed to the Final Orchestrator — which always receives the full raw history for highest-quality decisions.
+The pipeline is strictly sequential. Each stage produces an output that becomes the next stage's input as outlined in this flowchart.
+
+<img src="/utils/Flowchart.png">
 
 ---
 
 ## Agent Pipeline
 
 ### 1 — Research Agent
+
 Runs **asynchronously** per ticker. Calls all 8 FinancialDatasets.ai endpoints and structures the results into a `FinancialSummary` Pydantic object with ~60 typed fields including 8-year historical arrays, news headlines, segment revenues, insider trade activity, and analyst consensus estimates.
 
 ### 2 — Warren Buffett Agent
-Runs **8 domain analysis tools** sequentially against the `FinancialSummary`, then issues a `WarrenBuffettSignal`:
+
+Runs **8 domain analysis tools** sequentially against the `FinancialSummary` input class, then issues a `WarrenBuffettSignal`:
 
 | Tool | What it measures |
 |------|-----------------|
@@ -62,40 +67,43 @@ The final signal is **bullish / neutral / bearish** with a **confidence score 0�
 
 Each iteration runs three agents in sequence:
 
-- **Portfolio Manager** — proposes trades respecting risk profile (1–10) and available capital. Position sizing formula: `(confidence/100) × (risk_profile/10) × total_capital`, with a 30% per-ticker cap.
-- **Monitor Agent** — acts as a compliance officer. Validates no-shorting, budget constraints, and schema correctness. If invalid, returns violations for the Portfolio Manager to fix next iteration.
-- **What-If Agent** — devil's advocate. Identifies the single biggest risk or inefficiency and proposes a concrete executable counter-scenario. Skipped on the final iteration.
+- **Portfolio Manager** proposes trades respecting risk profile (1–10) and available capital. Position sizing formula: `(confidence/100) × (risk_profile/10) × total_capital`, with a 30% per-ticker cap.
+- **Monitor Agent** acts as a compliance officer. Validates no-shorting, budget constraints, and schema correctness. If invalid, it returns violations for the Portfolio Manager to address next iteration.
+- **What-If Agent** plays devil's advocate. Identifies the single biggest risk or inefficiency and proposes a concrete executable counter-scenario. Skipped on the final iteration.
 
 ### 4 — Final Orchestrator
-Receives the full iteration history (all PM proposals, monitor checks, what-if critiques) plus the Warren Buffett signals, and selects or synthesises the single best trade plan. Cross-references signals: BEARISH → no buy. BULLISH + high confidence → reward with allocation.
+
+Receives the full iteration history (all PM proposals, monitor checks, what-if critiques) plus the Warren Buffett signals, and selects or synthesises the single best trade plan. BEARISH signal = no buy. BULLISH + high confidence = reward with allocation.
+
+The iteration debate is also compressed into a readable summary panel shown to the user, but the orchestrator always receives the full raw history for highest-quality decisions.
 
 ---
 
-## Backtesting
+## 📐 Backtesting
 
-When a `backtesting_date` is provided, the system runs a **single-point comparison** between the agent portfolio's actual return and three canonical financial benchmarks over the holding period (`backtesting_date` → today).
+When a `backtesting_date` is provided, the system runs a **single-point comparison** between the agent portfolio's actual return and three canonical financial benchmarks over the holding period (`backtesting_date` to today).
 
 ### Benchmarks
 
 | Benchmark | How it's computed | Why it matters |
 |-----------|-------------------|----------------|
 | **Risk-Free Rate** | 4.5% annual T-bill proxy, scaled linearly: `0.045 × (days / 365)` | The floor — any strategy should beat cash |
-| **1/N Equal-Weight** | `initial_capital / N` allocated equally across all researched tickers, shares bought at `backtesting_date` prices, held passively | DeMiguel et al. (2009) showed naive equal-weighting is surprisingly hard to beat out-of-sample |
+| **1/N Equal-Weight** | `initial_capital / N` allocated equally across all researched tickers, shares bought at `backtesting_date` prices, held passively | DeMiguel et al. (2009) showed naive equal-weighting is a surprisingly hard benchmark to beat out-of-sample |
 | **S&P 500 (SPY)** | SPY close at `backtesting_date` vs SPY close today (2 API calls) | Standard benchmark used by institutional managers |
 
-### Calculation detail
+### Calculation
 
 ```
 agent_start  = Σ(shares × price_at_start) + remaining_cash
 agent_end    = Σ(shares × price_today)    + remaining_cash
-agent_return = (agent_end − agent_start) / agent_start
+agent_return = (agent_end - agent_start) / agent_start
 
-alpha = agent_return − benchmark_return   (positive = outperformed)
+alpha = agent_return - benchmark_return   (positive = outperformed)
 ```
 
-`price_at_start` is the price already fetched by the Research Agent at `backtesting_date` — no extra API cost. `price_today` requires one fresh call per held ticker plus 2 calls for SPY.
+`price_at_start` comes from the Research Agent run at `backtesting_date` — no extra API cost. `price_today` requires one fresh call per held ticker plus 2 calls for SPY.
 
-> **Limitation:** This is a single-point evaluation, not a walk-forward backtest. A proper walk-forward test (running the agent daily for 3+ months) would require ~450 LLM calls, roughly 17 hours of sequential execution, and $400–500 in API costs — beyond the scope of this educational demo.
+> **Limitation:** This is a single-point evaluation, not a walk-forward backtest. A proper walk-forward test would require re-running the full pipeline across many historical dates, which means hundreds of additional LLM calls per week of history and significant API cost — beyond the scope of this educational demo.
 
 ---
 
@@ -121,7 +129,7 @@ All 8 tools use the same `FINDAT_API_KEY`. No additional credentials are needed.
 | Layer | Technology |
 |-------|-----------|
 | Agent framework | LangChain (Python) — tool binding, structured output, async loops |
-| LLM | Google Gemini (`gemini-3.1-pro-preview`) via `langchain-google-genai` **or** Anthropic Claude (`claude-opus-4-6`) via `langchain-anthropic` |
+| LLM | Google Gemini (`gemini-3.1-pro-preview`) via `langchain-google-genai` or Anthropic Claude (`claude-opus-4-6`) via `langchain-anthropic` |
 | Data models | Pydantic — `FinancialSummary`, `WarrenBuffettSignal`, `ResearchAgentOutput` |
 | Financial data | [FinancialDatasets.ai](https://docs.financialdatasets.ai) — single API key, 8 endpoints |
 | Terminal UI | [Rich](https://github.com/Textualize/rich) — tables, panels, progress bars, Markdown |
@@ -132,8 +140,8 @@ All 8 tools use the same `FINDAT_API_KEY`. No additional credentials are needed.
 
 **1. Clone**
 ```bash
-git clone https://github.com/fede-giorgi/ai-agent.git
-cd ai-agent
+git clone https://github.com/fede-giorgi/AI-Agent-Driven-Hedge-Fund.git
+cd AI-Agent-Driven-Hedge-Fund
 ```
 
 **2. Create virtual environment**
@@ -157,12 +165,6 @@ Edit `.env`:
 FINDAT_API_KEY=your_financialdatasets_key      # required — covers all 8 data tools
 
 GOOGLE_API_KEY=your_gemini_key                 # required if using Google Gemini
-GEMINI_API_KEY=your_gemini_key                 # (same key, both vars needed by langchain)
-
-# Optional — override LLM (defaults shown)
-LLM_PROVIDER=google                            # "google" or "anthropic"
-LLM_MODEL=gemini-3.1-pro-preview
-
 ANTHROPIC_API_KEY=your_anthropic_key           # required only if LLM_PROVIDER=anthropic
 ```
 
@@ -183,14 +185,14 @@ The session prompts you for:
 
 | Prompt | Options |
 |--------|---------|
-| **Capital** | Any amount 1 – 1,000,000 |
+| **Capital** | Any amount 1 to 1,000,000 |
 | **LLM** | Google Gemini or Anthropic Claude; choose model |
-| **Risk Profile** | 1 (Ultra Conservative) → 10 (Highly Speculative) |
+| **Risk Profile** | 1 (Ultra Conservative) to 10 (Highly Speculative) |
 | **Backtesting date** | Optional `YYYY-MM-DD`; enables benchmark comparison |
 | **Ticker selection** | `default` (AAPL, MSFT, NVDA, GOOGL, META) · `auto` (5 diversified from ~600-stock universe) · `custom` (up to 5 manual tickers) |
 | **Portfolio** | Enter existing holdings or press `no` to start with cash only |
 
-Agents then run sequentially and print their outputs live to the terminal.
+Agents run sequentially and print their outputs live to the terminal.
 
 ---
 
@@ -208,7 +210,7 @@ python main.py --debug
 | Risk Profile | 5 (Balanced) |
 | Tickers | AAPL, MSFT, NVDA, GOOGL, META |
 | Iterations | **3** (vs 10 in interactive) |
-| Backtesting | Enabled — today minus 90 days |
+| Backtesting | Enabled, today minus 90 days |
 | LLM | Reads `$LLM_PROVIDER` / `$LLM_MODEL` env vars, defaults to `google` / `gemini-3.1-pro-preview` |
 
 To test Anthropic in debug mode:
@@ -218,43 +220,22 @@ LLM_PROVIDER=anthropic LLM_MODEL=claude-opus-4-6 python main.py --debug
 
 ---
 
-## Screenshots
-
-<img src="/utils/Research Agent.png">
-<img src="/utils/Warren Buffet Signal.png">
-<img src="/utils/WHAT-IF Agent.png">
-<img src="/utils/Final Orchestrator Agent.png">
-
----
-
-## Recording a Demo GIF
-
-```bash
-# Install
-brew install asciinema agg   # macOS
-# Linux: pip install asciinema && cargo install agg
-
-# Record (idle pauses > 2 s are collapsed — LLM wait time won't bloat the cast)
-asciinema rec --idle-time-limit 2 demo.cast
-python main.py --debug
-# Press Ctrl+D when done
-
-# Convert to GIF (3× speed, ~30-60 s from a ~700 s debug run)
-agg --speed 3 --idle-time-limit 1 demo.cast demo.gif
-```
-
-Place `demo.gif` in the repository root for it to appear at the top of this README.
-
----
-
-## Contributors
+## 👥 Contributors
 
 | Name | Role |
 |------|------|
-| **Luca Barattini** | System architecture, agent pipeline, backtesting, LLM integration |
-| **Federico Giorgi** | Co-developer, repository setup |
-| **Blanca Caballero** | Contributor |
-| **Myriam Pardo** | Contributor |
+| **Luca Barattini** | Main lead — system architecture, agent pipeline, LLM integration |
+| **Federico Giorgi** | Co-developer, repository setup, backtesting strategy |
+| **Blanca Caballero** | Mentoring, peer reviewer and contributor |
+| **Myriam Pardo** | Mentoring, peer reviewer and contributor |
+
+<br>
+
+<a href="https://github.com/fede-giorgi/AI-Agent-Driven-Hedge-Fund/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=fede-giorgi/AI-Agent-Driven-Hedge-Fund"/>
+</a>
+
+Made with [contributors-img](https://contrib.rocks)
 
 ---
 
