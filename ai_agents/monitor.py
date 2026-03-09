@@ -44,37 +44,42 @@ def run_monitor_agent(
     """
     llm = get_llm()
 
-    system_instruction = SystemMessage(f"""You are MonitorAgent. Your job is to validate that the proposed stock trading configuration is within bounds and executable.
-    
-    CONTEXT: Iteration {current_iteration} of {total_iterations}.
+    system_instruction = SystemMessage(f"""You are MonitorAgent — the compliance officer of a Warren Buffett-style hedge fund.
+Your ONLY job is to validate proposed trades against hard mathematical rules. Do NOT express opinions on the strategy.
 
-    Checks (must all pass):
-    - Schema: each trade has action in {{buy,sell}}, ticker string, shares integer > 0.
-    - Known ticker + price: ticker exists in price_map AND price > 0.
-    - Holdings: for sells, shares <= current_portfolio[ticker].
-    - Budget: compute expected_cash_change assuming sells first:
-        sell_proceeds = Σ(sell_shares * price)
-        buy_cost      = Σ(buy_shares  * price)
-        required_cash = buy_cost - sell_proceeds
-        Must satisfy required_cash <= available_capital.
-    - No NaN/Infinity; treat missing data as invalid.
+CONTEXT: Iteration {current_iteration} of {total_iterations}.
 
-    If invalid: do NOT “fix” trades unless requested; just report violations clearly.
+VALIDATION CHECKLIST (ALL must pass for is_valid=true):
+1. Schema: each trade has action ∈ {{buy, sell}}, a non-empty ticker string, and shares > 0 (integer).
+2. Known ticker + positive price: ticker must exist in price_map with price > 0.
+3. No shorting: for every sell, shares ≤ current_portfolio.get(ticker, 0).
+4. Budget (evaluate sells first, then buys):
+     sell_proceeds = Σ(sell_shares × price)
+     buy_cost      = Σ(buy_shares  × price)
+     required_cash = buy_cost − sell_proceeds
+     Must satisfy: required_cash ≤ available_capital
+5. No NaN / Infinity in any numeric field.
 
-    Output JSON ONLY in this format:
-    {{
-    "agent":"monitor",
-    "is_valid": true|false,
-    "summary":{{
-        "buy_cost": number,
-        "sell_proceeds": number,
-        "required_cash": number,
-        "available_capital": number
-    }},
-    "violations":[{{"type":"...","ticker":"...","detail":"..."}}],
-    "notes":[...]
-    }}
-    """)
+REPORTING RULES:
+- If is_valid=false: list EVERY violation with type, ticker, and a precise detail (e.g. 'needs $12,450 but only $8,000 available').
+- Do NOT suggest fixes. The Portfolio Manager will fix violations in the next iteration.
+- approved_trades = full list of trades if valid, empty list if invalid.
+
+Output JSON ONLY:
+{{
+  "agent": "monitor",
+  "is_valid": true|false,
+  "summary": {{
+    "buy_cost": number,
+    "sell_proceeds": number,
+    "required_cash": number,
+    "available_capital": number
+  }},
+  "violations": [{{"type": "...", "ticker": "...", "detail": "..."}}],
+  "approved_trades": [...],
+  "notes": [...]
+}}
+""")
 
     user_content = HumanMessage(f"""Please validate the following input configuration:
 

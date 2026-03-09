@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.markdown import Markdown
 from rich import box
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -30,6 +31,12 @@ def _text(content) -> str:
 
 # ──────────────────────────── display helpers ────────────────────────────────
 
+def _section(title: str, style: str = "cyan") -> None:
+    """Print a visually distinct section header."""
+    console.print(Panel(Text(title, style=f"bold {style}"),
+                        box=box.ROUNDED, border_style=style, expand=False, padding=(0, 2)))
+
+
 def _signal_color(signal: str) -> str:
     s = signal.upper()
     if s == "BULLISH":
@@ -41,8 +48,8 @@ def _signal_color(signal: str) -> str:
 
 def print_signals_table(signals: dict) -> None:
     """Prints Warren Buffett signals as a dashed ASCII table."""
-    console.print("\n[bold]ANALYST SIGNALS:[/bold]")
-    table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    _section("Analyst Signals")
+    table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                   show_header=True, header_style="bold")
     table.add_column("Ticker", style="cyan")
     table.add_column("Signal", justify="center")
@@ -62,12 +69,12 @@ def print_signals_table(signals: dict) -> None:
 
 def print_trades_table(trades: list, price_map: dict, title: str = "PROPOSED TRADES:") -> None:
     """Prints a list of trade dicts as a dashed ASCII table."""
-    console.print(f"\n[bold]{title}[/bold]")
+    _section(title)
     if not trades:
         console.print("[dim]  (no trades)[/dim]")
         return
 
-    table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                   show_header=True, header_style="bold")
     table.add_column("Ticker", style="cyan")
     table.add_column("Action", justify="center")
@@ -93,8 +100,8 @@ def print_trades_table(trades: list, price_map: dict, title: str = "PROPOSED TRA
 def print_portfolio_state(portfolio: dict, capital: float, price_map: dict,
                           title: str = "PORTFOLIO STATE:") -> None:
     """Prints current portfolio holdings and cash as a dashed ASCII table."""
-    console.print(f"\n[bold]{title}[/bold]")
-    table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    _section(title)
+    table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                   show_header=True, header_style="bold")
     table.add_column("Item", style="cyan")
     table.add_column("Value", justify="right")
@@ -110,7 +117,7 @@ def print_portfolio_state(portfolio: dict, capital: float, price_map: dict,
 
 def print_financial_summary(ticker: str, summary) -> None:
     """Prints a compact two-column table of key FinancialSummary fields for a ticker."""
-    console.print(f"\n[bold]FINANCIAL SUMMARY — {ticker}:[/bold]")
+    _section(f"Financial Summary — {ticker}")
 
     def _fmt(v, pct=False, price=False):
         if v is None:
@@ -121,7 +128,7 @@ def print_financial_summary(ticker: str, summary) -> None:
             return f"[yellow]${v:,.2f}[/yellow]"
         return f"[yellow]{v:,.2f}[/yellow]"
 
-    table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                   show_header=True, header_style="bold")
     table.add_column("Metric", style="cyan")
     table.add_column("Value", justify="right")
@@ -173,8 +180,8 @@ def print_financial_summary(ticker: str, summary) -> None:
 
 def print_monitor_result(monitor_output: dict) -> None:
     """Prints the monitor validation result as a compact dashed ASCII table."""
-    console.print("\n[bold]MONITOR CHECK:[/bold]")
-    table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    _section("Monitor Check", "green")
+    table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                   show_header=True, header_style="bold")
     table.add_column("Field", style="cyan")
     table.add_column("Value", justify="left")
@@ -290,7 +297,8 @@ def get_portfolio(capital: float, tickers: list):
 
         return portfolio
     else:
-        return generate_portfolio_allocation(capital, tickers)
+        console.print("[dim]Starting with empty portfolio (no existing holdings).[/dim]")
+        return {}
 
 
 def get_capital():
@@ -320,8 +328,8 @@ def get_risk_profile():
     Returns:
         int in the range [1, 10].
     """
-    console.print("\n[bold]RISK PROFILES:[/bold]")
-    table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    _section("Risk Profiles")
+    table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                   show_header=True, header_style="bold")
     table.add_column("Level", style="cyan", justify="center")
     table.add_column("Risk Profile", style="cyan")
@@ -367,13 +375,18 @@ def get_tickers_to_research():
     Returns:
         List of up to 5 ticker strings.
     """
+    DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "META"]
     console.print("\n[bold]Ticker Selection[/bold]")
-    console.print("  [cyan]auto[/cyan]   — pick 5 diversified tickers from the ~600-stock universe")
-    console.print("  [cyan]custom[/cyan] — enter up to 5 tickers manually")
+    console.print(f"  [cyan]default[/cyan] — use {', '.join(DEFAULT_TICKERS)} (same as --debug)")
+    console.print("  [cyan]auto[/cyan]    — pick 5 diversified tickers from the ~600-stock universe")
+    console.print("  [cyan]custom[/cyan]  — enter up to 5 tickers manually")
 
     while True:
-        choice = console.input("Select mode (auto/custom): ").lower().strip()
-        if choice == 'auto':
+        choice = console.input("Select mode (default/auto/custom): ").lower().strip()
+        if choice == 'default':
+            console.print(f"Using tickers: [bold]{DEFAULT_TICKERS}[/bold]")
+            return DEFAULT_TICKERS
+        elif choice == 'auto':
             n_buckets = 5
             bucket_size = max(1, len(TICKERS) // n_buckets)
             selected = []
@@ -392,7 +405,7 @@ def get_tickers_to_research():
             console.print(f"Using tickers: [bold]{tickers}[/bold]")
             return tickers
         else:
-            console.print("Invalid input. Please enter 'auto' or 'custom'.")
+            console.print("Invalid input. Please enter 'default', 'auto', or 'custom'.")
 
 
 def get_backtesting_date():
@@ -424,8 +437,8 @@ def get_llm_choice():
     Returns:
         Tuple of (provider: str, model: str).
     """
-    console.print("\n[bold]LLM SELECTION:[/bold]")
-    table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    _section("LLM Selection")
+    table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                   show_header=True, header_style="bold")
     table.add_column("#", style="cyan", justify="center")
     table.add_column("Provider", style="cyan")
@@ -526,154 +539,204 @@ Provide only the summary text — no headers, no JSON.
         response = llm.invoke([HumanMessage(content=prompt)])
         return _text(response.content)
     except Exception as e:
-        print(f"History summarisation failed: {e}")
+        console.print(f"[red]History summarisation failed: {e}[/red]")
         return json.dumps(history)
 
 
-def run_backtesting(portfolio: dict, price_map: dict, backtesting_date: str, capital: float):
+def run_backtesting(
+    portfolio: dict,
+    price_map: dict,
+    backtesting_date: str,
+    remaining_capital: float,
+    initial_capital: float,
+    all_tickers: list,
+) -> None:
     """
-    Compares actual portfolio performance against a linear regression baseline.
+    Compares agent portfolio performance against three standard financial benchmarks.
 
-    For each held ticker:
-    1. price_start is taken from price_map (price at backtesting_date).
-    2. price_today is fetched fresh from the API.
-    3. 90 days of monthly prices before backtesting_date are fetched.
-    4. A linear regression is fitted to project the expected price today.
-    5. alpha = actual_return - regression_baseline_return.
+    Benchmarks (no statistical model required):
+    1. Risk-free rate  — 4.5% annual T-bill proxy scaled to the holding period.
+    2. 1/N equal-weight — split initial_capital equally across all researched tickers
+       and hold. Academically established hard-to-beat baseline (DeMiguel et al. 2009).
+    3. S&P 500 (SPY)   — market index return over the same period (2 API calls).
 
     Args:
-        portfolio: dict of ticker → share count.
-        price_map: dict of ticker → price at backtesting_date.
-        backtesting_date: The historical start date string (YYYY-MM-DD).
-        capital: Cash not invested (used in total portfolio value calculation).
+        portfolio: Ticker → share count after final trades.
+        price_map: Ticker → price at backtesting_date (from Research Agent).
+        backtesting_date: Historical start date string (YYYY-MM-DD).
+        remaining_capital: Cash left after the agent's trades.
+        initial_capital: Total capital before any trades (used for 1/N benchmark).
+        all_tickers: All tickers researched this session (for 1/N benchmark).
     """
-    try:
-        import numpy as np
-        from sklearn.linear_model import LinearRegression
-    except ImportError:
-        console.print("[red]scikit-learn and numpy are required for backtesting. "
-                      "Install with: pip install scikit-learn numpy[/red]")
-        return
-
     from tools.get_stock_prices import get_stock_prices
 
-    console.rule("[bold blue]Backtesting Evaluation[/bold blue]")
-    console.print(f"Comparing portfolio performance: {backtesting_date} → TODAY", style="cyan")
-
-    console.print("\n[bold]BACKTEST vs LINEAR REGRESSION BASELINE:[/bold]")
-    backtest_table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
-                           show_header=True, header_style="bold")
-    backtest_table.add_column("Ticker", style="cyan")
-    backtest_table.add_column("Shares", justify="right")
-    backtest_table.add_column(f"Price ({backtesting_date})", justify="right")
-    backtest_table.add_column("Price (Today)", justify="right")
-    backtest_table.add_column("Actual Return", justify="right")
-    backtest_table.add_column("Regression Baseline", justify="right")
-    backtest_table.add_column("Alpha", justify="right")
-
-    total_start_value = 0
-    total_current_value = 0
-    total_baseline_value = 0
-    alphas = []
-
     bt_dt = datetime.strptime(backtesting_date, '%Y-%m-%d')
+    today_dt = datetime.today()
+    days_held = max((today_dt - bt_dt).days, 1)
 
+    RISK_FREE_ANNUAL = 0.045  # US T-bill / Fed funds proxy
+    risk_free_return = RISK_FREE_ANNUAL * (days_held / 365)
+
+    console.rule("[bold blue]Backtesting Evaluation[/bold blue]")
+    console.print(
+        f"Holding period: [cyan]{backtesting_date}[/cyan] → "
+        f"[cyan]{today_dt.strftime('%Y-%m-%d')}[/cyan] "
+        f"([yellow]{days_held} days[/yellow])"
+    )
+
+    # ── Fetch today's prices for all tickers (portfolio + 1/N universe) ────
+    console.print("Fetching current prices...", style="dim")
+    prices_today: dict = {}
+    for ticker in set(portfolio.keys()) | set(all_tickers):
+        try:
+            data = get_stock_prices.func(ticker=ticker)
+            if "error" not in data:
+                plist = data.get('prices', [])
+                if plist:
+                    prices_today[ticker] = plist[-1].get('close', 0)
+        except Exception:
+            pass
+
+    # ── SPY market benchmark (2 API calls) ─────────────────────────────────
+    spy_return = None
+    try:
+        bt_start_str = (bt_dt - timedelta(days=7)).strftime('%Y-%m-%d')
+        spy_hist = get_stock_prices.func(ticker="SPY", start_date=bt_start_str,
+                                         end_date=backtesting_date)
+        spy_now = get_stock_prices.func(ticker="SPY")
+        if "error" not in spy_hist and "error" not in spy_now:
+            ph = spy_hist.get('prices', [])
+            pn = spy_now.get('prices', [])
+            if ph and pn:
+                p0 = ph[-1].get('close', 0)
+                p1 = pn[-1].get('close', 0)
+                if p0 > 0:
+                    spy_return = (p1 - p0) / p0
+    except Exception:
+        pass
+
+    # ── Per-ticker performance table ────────────────────────────────────────
+    _section("Per-Ticker Performance")
+    ticker_table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
+                         show_header=True, header_style="bold")
+    ticker_table.add_column("Ticker", style="cyan")
+    ticker_table.add_column("Shares", justify="right")
+    ticker_table.add_column(f"Price ({backtesting_date})", justify="right")
+    ticker_table.add_column("Price (Today)", justify="right")
+    ticker_table.add_column("Return", justify="right")
+
+    invested_start = 0.0
+    invested_end = 0.0
     for ticker, shares in portfolio.items():
-        price_start = price_map.get(ticker, 0)
-        if price_start == 0:
+        p_start = price_map.get(ticker, 0)
+        p_today = prices_today.get(ticker, 0)
+        if p_start == 0 or shares == 0:
             continue
-
-        # Fetch today's price
-        price_today = 0
-        try:
-            today_data = get_stock_prices.func(ticker=ticker)
-            if "error" not in today_data:
-                prices_list = today_data.get('prices', [])
-                if prices_list:
-                    price_today = prices_list[-1].get('close', 0)
-        except Exception as e:
-            console.print(f"[red]Error fetching today price for {ticker}: {e}[/red]")
-
-        # Fetch 90-day monthly history before backtesting_date for regression
-        projected_price = price_start  # fallback: no movement
-        try:
-            hist_start = (bt_dt - timedelta(days=90)).strftime('%Y-%m-%d')
-            hist_data = get_stock_prices.func(
-                ticker=ticker,
-                start_date=hist_start,
-                end_date=backtesting_date,
-                interval="month"
-            )
-            hist_prices = hist_data.get('prices', []) if "error" not in hist_data else []
-
-            if len(hist_prices) >= 2:
-                closes = [p['close'] for p in hist_prices if p.get('close')]
-                X = np.array(range(len(closes))).reshape(-1, 1)
-                y = np.array(closes)
-                reg = LinearRegression().fit(X, y)
-
-                # Project forward: calculate days from hist_start to today
-                today = datetime.today()
-                days_total = (today - bt_dt).days
-                # In monthly intervals, each point ≈ 30 days
-                hist_len = len(closes)
-                forward_steps = days_total / 30
-                projected_price = reg.predict([[hist_len + forward_steps]])[0]
-        except Exception as e:
-            console.print(f"[yellow]Regression failed for {ticker}: {e}[/yellow]")
-
-        # Returns
-        actual_return = (price_today - price_start) / price_start if price_start > 0 else 0
-        baseline_return = (projected_price - price_start) / price_start if price_start > 0 else 0
-        alpha = actual_return - baseline_return
-        alphas.append(alpha)
-
-        val_start = shares * price_start
-        val_today = shares * price_today
-        val_baseline = shares * projected_price
-        total_start_value += val_start
-        total_current_value += val_today
-        total_baseline_value += val_baseline
-
-        actual_color = "green" if actual_return >= 0 else "red"
-        alpha_color = "green" if alpha >= 0 else "red"
-
-        backtest_table.add_row(
+        ret = (p_today - p_start) / p_start if p_start > 0 else 0.0
+        c = "green" if ret >= 0 else "red"
+        ticker_table.add_row(
             ticker,
-            str(shares),
-            f"${price_start:,.2f}",
-            f"${price_today:,.2f}",
-            f"[{actual_color}]{actual_return:+.2%}[/{actual_color}]",
-            f"{baseline_return:+.2%}",
-            f"[{alpha_color}]{alpha:+.2%}[/{alpha_color}]",
+            f"{shares:,}",
+            f"${p_start:,.2f}",
+            f"${p_today:,.2f}" if p_today else "[dim]N/A[/dim]",
+            f"[{c}]{ret:+.2%}[/{c}]",
         )
+        invested_start += shares * p_start
+        invested_end += shares * p_today
+    console.print(ticker_table)
 
-    console.print(backtest_table)
+    # ── Agent portfolio total return ────────────────────────────────────────
+    # Invested value + uninvested cash (cash earns 0% — opportunity cost is real)
+    agent_start = invested_start + remaining_capital
+    agent_end = invested_end + remaining_capital
+    agent_return = (agent_end - agent_start) / agent_start if agent_start > 0 else 0.0
 
-    initial_total = total_start_value + capital
-    current_total = total_current_value + capital
-    baseline_total = total_baseline_value + capital
+    # ── 1/N Equal-weight benchmark ──────────────────────────────────────────
+    # Split initial_capital equally across all researched tickers and hold.
+    ew_tickers = [t for t in all_tickers if price_map.get(t, 0) > 0]
+    ew_return = None
+    if ew_tickers:
+        alloc = initial_capital / len(ew_tickers)
+        ew_start = 0.0
+        ew_end = 0.0
+        for t in ew_tickers:
+            ps = price_map.get(t, 0)
+            pt = prices_today.get(t, 0)
+            if ps > 0 and pt > 0:
+                sh = int(alloc // ps)
+                ew_start += sh * ps
+                ew_end += sh * pt
+        uninvested_ew = initial_capital - ew_start  # fractional cash leftover
+        ew_total_start = ew_start + uninvested_ew
+        ew_total_end = ew_end + uninvested_ew
+        ew_return = (ew_total_end - ew_total_start) / ew_total_start if ew_total_start > 0 else 0.0
 
-    total_actual_return = (current_total - initial_total) / initial_total if initial_total > 0 else 0
-    total_baseline_return = (baseline_total - initial_total) / initial_total if initial_total > 0 else 0
-    total_alpha = total_actual_return - total_baseline_return
+    # ── Benchmark comparison table ──────────────────────────────────────────
+    def _r(val: float) -> str:
+        c = "green" if val >= 0 else "red"
+        return f"[{c}]{val:+.2%}[/{c}]"
 
-    verdict = "Beat" if total_alpha >= 0 else "Underperformed"
-    verdict_color = "green" if total_alpha >= 0 else "red"
+    def _alpha(agent: float, bench: float) -> str:
+        d = agent - bench
+        c = "green" if d >= 0 else "red"
+        return f"[{c}]{d:+.2%}[/{c}]"
 
-    console.print("\n[bold]BACKTEST SUMMARY:[/bold]")
-    summary_table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
-                          show_header=False)
-    summary_table.add_column("Metric", style="cyan")
-    summary_table.add_column("Value", justify="right")
-    summary_table.add_row(f"Initial Value ({backtesting_date})", f"[yellow]${initial_total:,.2f}[/yellow]")
-    summary_table.add_row("Current Value (Today)", f"[yellow]${current_total:,.2f}[/yellow]")
-    summary_table.add_row("Regression Baseline Value", f"[yellow]${baseline_total:,.2f}[/yellow]")
-    summary_table.add_row("Total Actual Return", f"[bold]{total_actual_return:+.2%}[/bold]")
-    summary_table.add_row("Regression Baseline Return", f"{total_baseline_return:+.2%}")
-    summary_table.add_row("Total Alpha", f"[{verdict_color}][bold]{total_alpha:+.2%}[/bold][/{verdict_color}]")
-    summary_table.add_row("Verdict", f"[{verdict_color}]{verdict} the linear regression baseline[/{verdict_color}]")
-    console.print(summary_table)
+    _section("Benchmark Comparison")
+    bench_table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
+                        show_header=True, header_style="bold")
+    bench_table.add_column("Strategy / Benchmark", style="cyan", min_width=22)
+    bench_table.add_column("Return", justify="right")
+    bench_table.add_column("Alpha vs. Agent", justify="right")
+    bench_table.add_column("Description")
+
+    ac = "green" if agent_return >= 0 else "red"
+    bench_table.add_row(
+        "[bold]Agent Portfolio[/bold]",
+        f"[bold {ac}]{agent_return:+.2%}[/bold {ac}]",
+        "—",
+        "Warren Buffett multi-agent system",
+    )
+    if ew_return is not None:
+        bench_table.add_row(
+            "1/N Equal-Weight",
+            _r(ew_return),
+            _alpha(agent_return, ew_return),
+            f"Naïve equal allocation — {len(ew_tickers)} tickers (DeMiguel 2009)",
+        )
+    if spy_return is not None:
+        bench_table.add_row(
+            "S&P 500 (SPY)",
+            _r(spy_return),
+            _alpha(agent_return, spy_return),
+            "Market index benchmark",
+        )
+    else:
+        bench_table.add_row("S&P 500 (SPY)", "[dim]N/A[/dim]", "[dim]N/A[/dim]",
+                            "SPY unavailable from API")
+    bench_table.add_row(
+        "Risk-Free (Cash)",
+        _r(risk_free_return),
+        _alpha(agent_return, risk_free_return),
+        f"4.5% annual T-bill proxy — {days_held}-day equivalent",
+    )
+    console.print(bench_table)
+
+    # ── Verdict ─────────────────────────────────────────────────────────────
+    candidates = [
+        (ew_return, "1/N Equal-Weight"),
+        (spy_return, "S&P 500 (SPY)"),
+        (risk_free_return, "Risk-Free Cash"),
+    ]
+    available = [(r, lbl) for r, lbl in candidates if r is not None]
+    beaten = [(r, lbl) for r, lbl in available if agent_return > r]
+    n_beaten, n_total = len(beaten), len(available)
+    vc = "green" if n_beaten == n_total else "yellow" if n_beaten > 0 else "red"
+    console.print(f"\n[{vc}][bold]Verdict: Agent beat {n_beaten}/{n_total} benchmarks[/bold][/{vc}]")
+    if beaten:
+        console.print(f"  [green]✓ Beat: {', '.join(l for _, l in beaten)}[/green]")
+    missed = [(r, l) for r, l in available if agent_return <= r]
+    if missed:
+        console.print(f"  [red]✗ Underperformed: {', '.join(l for _, l in missed)}[/red]")
 
 
 def main():
@@ -694,7 +757,10 @@ def main():
     debug_mode = "--debug" in sys.argv
     console.record = True
 
-    console.print("--- Welcome to the Financial Agent ---", style="bold green")
+    console.print(Panel(
+        "[bold]Welcome to the Financial Agent[/bold]\n[dim]Warren Buffett-style multi-agent hedge fund simulation[/dim]",
+        box=box.DOUBLE, border_style="green", padding=(1, 4), expand=False
+    ))
 
     if debug_mode:
         console.print("[bold red]DEBUG MODE ENABLED[/bold red]")
@@ -714,7 +780,7 @@ def main():
 
     # Import agents and tools after dependency check
     from ai_agents.research_agent import run_research_agent
-    from ai_agents.warren_buffet_agent import warren_buffett_agent, get_research_brief
+    from ai_agents.warren_buffet_agent import warren_buffett_agent
     from ai_agents.portfolio_and_risk_manager import run_portfolio_manager_agent
     from ai_agents.what_if_agent import run_what_if_agent
     from ai_agents.final_orchestrator_agent import run_final_orchestrator_agent, generate_ascii_chart
@@ -722,7 +788,8 @@ def main():
     from tools.get_stock_prices import get_stock_prices
     from llm import get_llm
 
-    console.print("\n--- Starting Financial Analysis ---", style="bold green")
+    console.print(Panel("[bold]Starting Financial Analysis[/bold]",
+                        box=box.ROUNDED, border_style="green", expand=False, padding=(0, 2)))
 
     if debug_mode:
         tickers_to_research = ["AAPL", "MSFT", "NVDA", "GOOGL", "META"]
@@ -734,12 +801,8 @@ def main():
 
     console.print(f"Researching {len(tickers_to_research)} tickers...")
 
-    # 1. Research Brief
-    console.print("Generating Research Brief based on Warren Buffett strategy...", style="bold yellow")
-    research_brief = get_research_brief()
-
-    # 2. Research Agent (async)
-    research_output = asyncio.run(run_research_agent(tickers_to_research, research_brief, backtesting_date))
+    # 1. Research Agent (async)
+    research_output = asyncio.run(run_research_agent(tickers_to_research, backtesting_date))
     financial_data = {res.financial_summary.ticker: res.financial_summary for res in research_output.results}
     console.print("Research complete.")
 
@@ -768,8 +831,8 @@ def main():
     print_signals_table(warren_buffett_signals)
 
     # Configuration summary table
-    console.print("\n[bold]SESSION CONFIGURATION:[/bold]")
-    cfg_table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+    _section("Session Configuration", "yellow")
+    cfg_table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                       show_header=False)
     cfg_table.add_column("Setting", style="cyan")
     cfg_table.add_column("Value", justify="right")
@@ -788,56 +851,67 @@ def main():
     initial_capital = capital
 
     total_iterations = 3 if debug_mode else 10
-    for i in range(1, total_iterations + 1):
-        console.rule(f"[bold yellow]Iteration {i}/{total_iterations}[/bold yellow]")
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Trading iterations", total=total_iterations)
+        for i in range(1, total_iterations + 1):
+            progress.update(task, description=f"Iteration {i}/{total_iterations}")
+            console.rule(f"[bold yellow]Iteration {i}/{total_iterations}[/bold yellow]")
 
-        print_signals_table(warren_buffett_signals)
-        print_portfolio_state(initial_portfolio, initial_capital, price_map,
-                              title=f"PORTFOLIO STATE (iteration {i}):")
+            print_signals_table(warren_buffett_signals)
+            print_portfolio_state(initial_portfolio, initial_capital, price_map,
+                                  title=f"PORTFOLIO STATE (iteration {i}):")
 
-        # Portfolio Manager
-        console.print("\n[bold]PORTFOLIO MANAGER:[/bold]")
-        pm_output = run_portfolio_manager_agent(
-            initial_portfolio, initial_capital, risk_profile, warren_buffett_signals, price_map, i, total_iterations, history
-        )
-        proposed_trades = pm_output.get("proposed_trades", [])
-        print_trades_table(proposed_trades, price_map, title="PROPOSED TRADES:")
+            # Portfolio Manager
+            _section("Portfolio Manager")
+            pm_output = run_portfolio_manager_agent(
+                initial_portfolio, initial_capital, risk_profile, warren_buffett_signals, price_map, i, total_iterations, history
+            )
+            proposed_trades = pm_output.get("proposed_trades", [])
+            print_trades_table(proposed_trades, price_map, title="PROPOSED TRADES:")
 
-        # Monitor
-        console.print("\n[bold]MONITOR AGENT:[/bold]")
-        monitor_output = run_monitor_agent(proposed_trades, initial_portfolio, initial_capital, price_map, i, total_iterations, history)
-        print_monitor_result(monitor_output)
+            # Monitor
+            _section("Monitor Agent", "green")
+            monitor_output = run_monitor_agent(proposed_trades, initial_portfolio, initial_capital, price_map, i, total_iterations, history)
+            print_monitor_result(monitor_output)
 
-        # What-If (skip on last iteration)
-        what_if_output = {}
-        if i < total_iterations:
-            console.print("\n[bold]WHAT-IF AGENT:[/bold]")
-            what_if_output = run_what_if_agent(initial_portfolio, initial_capital, proposed_trades, price_map, i, total_iterations, warren_buffett_signals, history)
-            alt = what_if_output.get("alternative_scenario", {}) or {}
-            counter_trades = alt.get("proposed_trades", []) if isinstance(alt, dict) else []
-            print_trades_table(counter_trades, price_map, title="COUNTER-PROPOSAL:")
-            critique = what_if_output.get("critique", "")
-            reasoning = what_if_output.get("reasoning", "")
-            if critique:
-                console.print(Panel(str(critique), title="[dim]Critique[/dim]",
-                                    border_style="dim", padding=(0, 1)))
-            if reasoning:
-                console.print(Panel(str(reasoning), title="[dim]Reasoning[/dim]",
-                                    border_style="dim", padding=(0, 1)))
+            # What-If (skip on last iteration)
+            what_if_output = {}
+            if i < total_iterations:
+                _section("What-If Agent", "magenta")
+                what_if_output = run_what_if_agent(initial_portfolio, initial_capital, proposed_trades, price_map, i, total_iterations, warren_buffett_signals, history)
+                alt = what_if_output.get("alternative_scenario", {}) or {}
+                counter_trades = alt.get("proposed_trades", []) if isinstance(alt, dict) else []
+                print_trades_table(counter_trades, price_map, title="COUNTER-PROPOSAL:")
+                critique = what_if_output.get("critique", "")
+                reasoning = what_if_output.get("reasoning", "")
+                if critique:
+                    console.print(Panel(str(critique), title="[dim]Critique[/dim]",
+                                        border_style="dim", padding=(0, 1)))
+                if reasoning:
+                    console.print(Panel(str(reasoning), title="[dim]Reasoning[/dim]",
+                                        border_style="dim", padding=(0, 1)))
 
-        iteration_data = {
-            "iteration": i,
-            "pm_proposal": pm_output,
-            "monitor_check": monitor_output,
-            "what_if_critique": what_if_output
-        }
-        history.append(iteration_data)
+            iteration_data = {
+                "iteration": i,
+                "pm_proposal": pm_output,
+                "monitor_check": monitor_output,
+                "what_if_critique": what_if_output
+            }
+            history.append(iteration_data)
+            progress.advance(task)
 
     # --- History Compression ---
     console.rule("[bold yellow]Compressing History[/bold yellow]")
     llm_instance = get_llm(llm_provider, llm_model)
-    history_summary = summarize_iteration_history(history, llm_instance)
-    console.print("\n[bold]ITERATION SUMMARY:[/bold]")
+    with console.status("[bold yellow]Compressing iteration history...[/bold yellow]", spinner="dots"):
+        history_summary = summarize_iteration_history(history, llm_instance)
+    _section("Iteration Summary", "yellow")
     console.print(Panel(history_summary, border_style="yellow", padding=(1, 2)))
 
     # --- Final Orchestrator ---
@@ -845,10 +919,11 @@ def main():
     print_signals_table(warren_buffett_signals)
     console.print(generate_ascii_chart(history))
 
-    console.print("\n[bold]FINAL ORCHESTRATOR:[/bold]")
-    final_output = run_final_orchestrator_agent(
-        initial_portfolio, initial_capital, warren_buffett_signals, price_map, history
-    )
+    _section("Final Orchestrator", "green")
+    with console.status("[bold green]Final Orchestrator deliberating...[/bold green]", spinner="dots"):
+        final_output = run_final_orchestrator_agent(
+            initial_portfolio, initial_capital, warren_buffett_signals, price_map, history
+        )
 
     reasoning = final_output.get("final_decision_reasoning", "No reasoning provided.")
     console.print(Panel(Markdown(reasoning), title="Final Decision Reasoning", border_style="green", padding=(1, 2)))
@@ -859,8 +934,8 @@ def main():
     # Expected portfolio after trades
     expected = final_output.get("expected_portfolio", {})
     if expected:
-        console.print("\n[bold]EXPECTED PORTFOLIO:[/bold]")
-        exp_table = Table(box=box.ASCII_DOUBLE_HEAD, show_edge=True, pad_edge=True,
+        _section("Expected Portfolio")
+        exp_table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
                           show_header=True, header_style="bold")
         exp_table.add_column("Ticker", style="cyan")
         exp_table.add_column("Shares", justify="right")
@@ -892,14 +967,16 @@ def main():
 
     # --- Backtesting ---
     if backtesting_date and portfolio:
-        run_backtesting(portfolio, price_map, backtesting_date, capital)
+        run_backtesting(portfolio, price_map, backtesting_date, capital, initial_capital, tickers_to_research)
 
     # End Timer
     end_time = time.time()
-    console.print(f"\n[bold]Total Execution Time:[/bold] {end_time - start_time:.2f} seconds")
-
+    elapsed = end_time - start_time
     console.save_text("financial_agent_session.txt")
-    console.print("\n[dim]Session log saved to 'financial_agent_session.txt'[/dim]")
+    console.print(Panel(
+        f"[bold]Completed in {elapsed:.1f}s[/bold]  |  Session log: [dim]financial_agent_session.txt[/dim]",
+        box=box.ROUNDED, border_style="green", expand=False, padding=(0, 2)
+    ))
 
 
 if __name__ == "__main__":

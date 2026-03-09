@@ -3,7 +3,10 @@ from typing import List, Dict, Any
 
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
+from rich.console import Console
 from llm import get_llm
+
+_console = Console()
 from classes.financial_summary import FinancialSummary, ToolStatus, Error, Result, ResearchAgentOutput
 from tools.get_financials import get_financials
 from tools.get_metrics import get_metrics
@@ -31,9 +34,23 @@ _ALL_TOOLS = [
 _SINGLE_CALL_TOOLS = {t.name for t in _ALL_TOOLS}
 
 
+_REQUIRED_LINE_ITEMS = [
+    "capital_expenditure", "depreciation_and_amortization", "net_income",
+    "outstanding_shares", "total_assets", "total_liabilities", "shareholders_equity",
+    "dividends_and_other_cash_distributions", "issuance_or_purchase_of_equity_shares",
+    "gross_profit", "revenue", "free_cash_flow", "current_assets", "current_liabilities",
+]
+
+_REQUIRED_METRICS = [
+    "return_on_invested_capital", "gross_margin", "operating_margin", "debt_to_equity",
+    "return_on_equity", "current_ratio", "interest_coverage", "revenue_growth",
+    "earnings_growth", "book_value_growth", "payout_ratio", "free_cash_flow_per_share",
+    "earnings_per_share",
+]
+
+
 async def run_research_agent(
         tickers: List[str],
-        research_config: Dict[str, Any],
         backtesting_date: str = None,
 ) -> ResearchAgentOutput:
     """
@@ -48,8 +65,6 @@ async def run_research_agent(
 
     Args:
         tickers: List of ticker symbols to research.
-        research_config: Dict produced by get_research_brief() with focus_areas,
-                         required_metrics, required_line_items, and search_queries.
         backtesting_date: Optional date string (YYYY-MM-DD). When provided, all
                           tool calls use this as the end_date.
 
@@ -60,11 +75,11 @@ async def run_research_agent(
     structured_llm = llm.with_structured_output(Result)
     agent_output = ResearchAgentOutput(requested_tickers=tickers)
 
-    await _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output, research_config)
+    await _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output)
     return agent_output
 
 
-async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output, research_config):
+async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output):
     """
     Processes each ticker sequentially: runs the data-gathering tool loop, then
     compiles a structured Result via a final structured-output LLM call.
@@ -75,10 +90,9 @@ async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent
         llm: Base LLM instance for the agentic loop.
         structured_llm: LLM bound to the Result output schema.
         agent_output: Mutable ResearchAgentOutput to append results/errors into.
-        research_config: Research brief dict.
     """
     for ticker in tickers:
-        print(f"\nResearching {ticker}...")
+        _console.print(f"\n[bold cyan]Researching {ticker}...[/bold cyan]")
 
         tools = _ALL_TOOLS
         llm_with_tools = llm.bind_tools(tools)
@@ -87,33 +101,32 @@ async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent
         date_instruction = f"Pass `end_date='{backtesting_date}'` to all tools." if backtesting_date else ""
 
         messages = [
-            SystemMessage(content=f"""You are a Research Agent. Your goal is to gather comprehensive financial data
-for '{ticker}' to populate a FinancialSummary.
+            SystemMessage(content=f"""You are a Data Research Agent feeding a Warren Buffett-style investment pipeline. \
+Your sole job is raw data collection for '{ticker}' — do NOT interpret or score the data. \
+Downstream agents will perform all analysis.
 
-RESEARCH BRIEF — focus areas:
-{json.dumps(research_config.get('focus_areas', []), indent=2)}
+CRITICAL DATA REQUIREMENTS (the Warren Buffett Agent needs these to score all 8 dimensions):
+- 8 YEARS of historical line items (net_income, revenue, gross_profit, shareholders_equity,
+  outstanding_shares, issuance_or_purchase_of_equity_shares) — use limit=8 in get_financial_line_items.
+- 8 YEARS of financial metrics (return_on_equity, operating_margin) — use limit=8 in get_metrics.
+- Current price from get_stock_prices (most recent close).
+- News headlines from get_company_news for qualitative context.
+- Segment breakdown from get_segmented_revenues (most recent period).
+- Insider trades from get_insider_trades (limit=20, recent transactions only).
+- Analyst estimates from get_analyst_estimates (most forward annual period).
 
-TOOLS AVAILABLE:
+TOOLS — call ALL of them exactly once:
+- `get_stock_prices`          — current price (default 7-day window is fine)
+- `get_financial_line_items`  — MUST include: {json.dumps(_REQUIRED_LINE_ITEMS)} with limit=8
+- `get_metrics`               — MUST include: {json.dumps(_REQUIRED_METRICS)} with limit=8
 - `get_financials`            — income statement, balance sheet, cash flow
-- `get_metrics`               — 50+ ratios; prioritise: {json.dumps(research_config.get('required_metrics', []))}
-- `get_financial_line_items`  — granular line items (call with limit=8 for 8 years of history);
-                                 MUST fetch: {json.dumps(research_config.get('required_line_items', []))}
-- `get_stock_prices`          — OHLCV history (fetch current price)
-- `get_company_news`          — recent news headlines from FinancialDatasets.ai
-- `get_segmented_revenues`    — business-segment / geographic revenue breakdown
-- `get_insider_trades`        — recent Form 4 insider buy/sell filings
-- `get_analyst_estimates`     — Wall Street consensus revenue & EPS estimates
+- `get_company_news`          — recent headlines (limit=5)
+- `get_segmented_revenues`    — business-segment / geographic revenue (limit=4)
+- `get_insider_trades`        — Form 4 buy/sell filings (limit=20)
+- `get_analyst_estimates`     — consensus revenue & EPS (limit=4)
 
-INSTRUCTIONS:
-1. Call `get_stock_prices` to fetch current price.
-2. Call `get_financial_line_items` with limit=8 to get 8 years of multi-period history.
-3. Call `get_metrics`, `get_financials` for ratios and statements.
-4. Call `get_company_news` for qualitative context.
-5. Call `get_segmented_revenues` to understand revenue mix.
-6. Call `get_insider_trades` (limit=20) to assess insider sentiment.
-7. Call `get_analyst_estimates` for forward consensus.
-8. {date_instruction}
-9. Each tool should be called at most once. Stop when all tools have been called.
+{date_instruction}
+Call each tool at most once. Stop once all 8 tools have been called.
 """),
             HumanMessage(content=f"Start research for {ticker}."),
         ]
@@ -132,10 +145,10 @@ INSTRUCTIONS:
                 args = tool_call["args"]
 
                 if tool_name in _SINGLE_CALL_TOOLS and tool_name in tools_called:
-                    print(f"  --> Skipping redundant call: {tool_name}")
+                    _console.print(f"  [dim]--> Skipping redundant call: {tool_name}[/dim]")
                     tool_result = {"error": f"'{tool_name}' already called. Do not call again."}
                 else:
-                    print(f"  --> Calling: {tool_name}  args={json.dumps(args)}")
+                    _console.print(f"  [dim]-->[/dim] [cyan]{tool_name}[/cyan]  [dim]args={json.dumps(args)}[/dim]")
                     try:
                         tool_result = await tool_map[tool_name].ainvoke(args) if tool_name in tool_map \
                             else {"error": f"Unknown tool: {tool_name}"}
@@ -197,8 +210,8 @@ Output valid JSON matching the Result model.
 """)
             result = structured_llm.invoke([system_message] + messages)
             agent_output.results.append(result)
-            print(f"  ✓ {ticker} structured successfully.")
+            _console.print(f"  [green]✓ {ticker} structured successfully.[/green]")
 
         except Exception as e:
             agent_output.errors.append(Error(tool="processing_chain", message=str(e), ticker=ticker))
-            print(f"  ✗ {ticker} structuring failed: {e}")
+            _console.print(f"  [red]✗ {ticker} structuring failed: {e}[/red]")

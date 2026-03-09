@@ -5,5 +5,3 @@ pydantic
 langchain-google-genai
 langchain-anthropic
 rich
-scikit-learn
-numpy

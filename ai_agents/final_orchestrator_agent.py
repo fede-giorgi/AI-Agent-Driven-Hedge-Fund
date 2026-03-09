@@ -4,6 +4,7 @@ from llm import get_llm
 from langchain_core.messages import SystemMessage, HumanMessage
 from rich.console import Console
 from rich.table import Table
+from rich import box
 
 
 def _text(content) -> str:
@@ -25,25 +26,40 @@ def run_final_orchestrator_agent(
     llm = get_llm()
     
     system_message = SystemMessage(
-        content="""You are the FinalOrchestratorAgent. You have overseen a simulation loop where a Portfolio Manager, a Monitor, and a What-If Challenger have debated trading strategies for 10 iterations.
-        
-        Your Goal: Make the FINAL, definitive trading decision to be executed on the user's account.
+        content="""You are FinalOrchestratorAgent — the Chief Investment Officer of a Warren Buffett-style hedge fund.
+You have just received a compressed summary of the full multi-iteration debate between the Portfolio Manager, Monitor, and What-If Agent.
 
-        Instructions:
-        1. Review the history. Look for the most robust, risk-adjusted proposal that passed the Monitor's checks.
-        2. Consider the "What-If" critiques. Did they raise valid points?
-        3. Decide on the final set of trades. You can choose one of the proposals from the history or synthesize a new one based on the insights.
-        4. Ensure the final trades are valid (sufficient capital, no shorting).
+YOUR GOAL: Make the single FINAL, definitive trading decision that will be executed on the user's account.
 
-        Output JSON ONLY:
-        {
-          "agent": "final_orchestrator",
-          "final_decision_reasoning": "Explanation of why this strategy was chosen over others",
-          "final_trades": [{"action":"buy|sell","ticker":"XXX","shares":int}],
-          "expected_portfolio": {"TICKER": int},
-          "expected_capital": float
-        }
-        """
+DECISION FRAMEWORK:
+1. CONSENSUS CHECK: Which trade proposals appeared consistently across multiple iterations (stable conviction)?
+   Prefer stable proposals over one-off suggestions that changed every iteration.
+2. MONITOR COMPLIANCE: Only consider proposals that passed (or would pass) Monitor validation.
+   If all iterations had violations, synthesise a conservative valid plan.
+3. WHAT-IF SYNTHESIS: Did the What-If Agent raise a point that was never addressed?
+   If yes, incorporate it. If the PM consistently refuted it, side with the PM.
+4. CAPITAL EFFICIENCY: Ensure the final trades deploy capital productively (avoid leaving >20% uninvested
+   unless risk profile is Low 1-3).
+5. ORIGINAL SIGNALS: Always cross-reference with Warren Buffett signals. BEARISH → do not buy. BULLISH + high confidence → reward with allocation.
+
+SYNTHESIS vs. SELECTION:
+- PREFER selecting the best single iteration's trades if one clearly dominated.
+- SYNTHESISE a new plan only if no single iteration was satisfactory.
+
+HARD CONSTRAINTS (same as Monitor):
+- No shorting: sell_shares ≤ current holdings.
+- Budget: Σ(buy × price) − Σ(sell × price) ≤ available_capital.
+- Only trade tickers with a valid price in price_map.
+
+Output JSON ONLY:
+{
+  "agent": "final_orchestrator",
+  "final_decision_reasoning": "Which iteration/proposal was chosen and why, addressing PM vs What-If debate",
+  "final_trades": [{"action": "buy|sell", "ticker": "XXX", "shares": int}],
+  "expected_portfolio": {"TICKER": int},
+  "expected_capital": float
+}
+"""
     )
 
     human_message = HumanMessage(
@@ -76,7 +92,7 @@ def generate_ascii_chart(history: List[Dict[str, Any]]) -> Table:
     """
     Generates a Rich Table showing trade proposals (quantities) over iterations for both agents.
     """
-    table = Table(title="Trade Proposals Over Iterations (PM vs What-If)")
+    table = Table(title="Trade Proposals Over Iterations (PM vs What-If)", box=box.ROUNDED)
     table.add_column("Iter", justify="center", style="cyan")
     table.add_column("Ticker", style="magenta")
     table.add_column("PM Proposal", justify="right", style="green")

@@ -23,6 +23,50 @@ def estimate_maintenance_capex(summary: FinancialSummary) -> float:
     return max(0.85 * capex_magnitude, da)
 
 
+def estimate_wacc(summary: FinancialSummary) -> float:
+    """
+    Estimates the Weighted Average Cost of Capital (WACC) from available summary fields.
+
+    Uses the CAPM for cost of equity (assuming beta = 1.0, risk-free rate = 4.5%,
+    equity risk premium = 5.5%) and derives cost of debt from interest_coverage.
+    Falls back to 10% if key fields are unavailable.
+
+    Args:
+        summary: A FinancialSummary with market_cap, debt_to_equity, and
+                 interest_coverage fields.
+
+    Returns:
+        WACC as a float in the range [0.06, 0.18].
+    """
+    risk_free = 0.045
+    erp = 0.055  # equity risk premium
+    beta = 1.0   # market-neutral assumption
+    cost_of_equity = risk_free + beta * erp  # ≈ 10%
+
+    # Cost of debt: infer from interest coverage (lower coverage → higher spread)
+    ic = summary.interest_coverage
+    if ic and ic > 0:
+        # Rough mapping: IC 1x → +8%, IC 5x → +3%, IC 15x → +1.5%
+        spread = max(0.015, min(0.08, 10.0 / (ic + 1)))
+        cost_of_debt = risk_free + spread
+    else:
+        cost_of_debt = risk_free + 0.05  # default 9.5%
+
+    # Capital structure weights from debt_to_equity ratio
+    de = summary.debt_to_equity
+    if de and de >= 0 and summary.market_cap and summary.market_cap > 0:
+        total_debt = summary.market_cap * de  # approximation
+        total_value = summary.market_cap + total_debt
+        w_equity = summary.market_cap / total_value
+        w_debt = total_debt / total_value
+        tax_rate = 0.25
+        wacc = w_equity * cost_of_equity + w_debt * cost_of_debt * (1 - tax_rate)
+    else:
+        wacc = cost_of_equity  # no debt data — use cost of equity only
+
+    return float(min(max(wacc, 0.06), 0.18))
+
+
 def calculate_owner_earnings(summary: FinancialSummary) -> dict:
     """
     Calculates Buffett's "owner earnings" — a truer measure of free cash generation.
@@ -56,7 +100,7 @@ def calculate_intrinsic_value(summary: FinancialSummary) -> dict:
     - Terminal: 2.5% perpetual growth rate
 
     A 15% conservatism haircut is applied to the raw DCF total.
-    Discount rate: 10%.
+    Discount rate: WACC estimated from debt_to_equity + interest_coverage (falls back to ~10%).
 
     Args:
         summary: A FinancialSummary with earnings, cash-flow, and share-count fields.
@@ -88,7 +132,9 @@ def calculate_intrinsic_value(summary: FinancialSummary) -> dict:
     elif summary.earnings_growth and summary.earnings_growth > 0:
         growth_rate = min(summary.earnings_growth, 0.08)
 
-    discount_rate = 0.10
+    # Use WACC as the discount rate (more rigorous than a flat 10%).
+    # For most large-caps this will be 8–12%; the floor/cap is [6%, 18%].
+    discount_rate = estimate_wacc(summary)
     terminal_growth_rate = 0.025
     stage2_growth = growth_rate / 2
 
@@ -127,6 +173,6 @@ def calculate_intrinsic_value(summary: FinancialSummary) -> dict:
         "details": (
             f"Intrinsic value ~${intrinsic_value:,.0f} "
             f"(stage1 growth {growth_rate:.1%}, stage2 {stage2_growth:.1%}, "
-            f"terminal 2.5%, 10% discount, 15% haircut)."
+            f"terminal 2.5%, WACC {discount_rate:.1%}, 15% haircut)."
         ),
     }

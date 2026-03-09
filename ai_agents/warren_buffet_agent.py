@@ -8,7 +8,10 @@ import math
 import json
 
 from classes.financial_summary import FinancialSummary, WarrenBuffettSignal
+from rich.console import Console
 from llm import get_llm
+
+_console = Console()
 
 from tools.analyze_book_value_growth import analyze_book_value_growth
 from tools.analyze_consistency import analyze_consistency
@@ -17,63 +20,6 @@ from tools.analyze_management_quality import analyze_management_quality
 from tools.analyze_moat import analyze_moat
 from tools.analyze_pricing_power import analyze_pricing_power
 from tools.calculate_intrinsic_value import calculate_intrinsic_value
-
-# Define the Research Strategy/Briefing
-def get_research_brief():
-    """
-    Generates the Research Brief that defines exactly what the Research Agent should look for.
-    This ensures the data gathering is intent-driven based on Warren Buffett's analysis needs.
-    """
-    return {
-        "focus_areas": [
-            "Current Stock Price",
-            "Economic Moat (Competitive Advantage)",
-            "Management Quality & Integrity",
-            "Financial Strength & Health",
-            "Earnings Consistency & Growth",
-            "Intrinsic Value Calculation"
-        ],
-        "required_metrics": [
-            "return_on_invested_capital", 
-            "gross_margin", 
-            "operating_margin",
-            "debt_to_equity", 
-            "return_on_equity", 
-            "current_ratio", 
-            "interest_coverage", 
-            "revenue_growth", 
-            "earnings_growth", 
-            "book_value_growth", 
-            "payout_ratio", 
-            "free_cash_flow_per_share", 
-            "earnings_per_share"
-        ],
-        "required_line_items": [
-            "capital_expenditure",
-            "depreciation_and_amortization",
-            "net_income",
-            "outstanding_shares",
-            "total_assets",
-            "total_liabilities",
-            "shareholders_equity",
-            "dividends_and_other_cash_distributions",
-            "issuance_or_purchase_of_equity_shares",
-            "gross_profit",
-            "revenue",
-            "free_cash_flow",
-            "current_assets",
-            "current_liabilities"
-        ],
-        "search_queries": [
-            "competitive advantage",
-            "economic moat",
-            "management integrity",
-            "capital allocation strategy",
-            "regulatory risks",
-            "antitrust issues",
-            "market share trends"
-        ]
-    }
 
 def warren_buffett_agent(summary: FinancialSummary) -> dict:
     """
@@ -92,7 +38,7 @@ def warren_buffett_agent(summary: FinancialSummary) -> dict:
     Returns:
         dict mapping ``{ticker: WarrenBuffettSignal.model_dump()}``.
     """
-    print(f"Analyzing {summary.ticker} with Warren Buffett agent...")
+    _console.print(f"[bold yellow]Analyzing {summary.ticker} with Warren Buffett agent...[/bold yellow]")
     
     llm = get_llm()
     
@@ -134,33 +80,74 @@ def warren_buffett_agent(summary: FinancialSummary) -> dict:
         """Assesses the company's ability to raise prices (gross margins)."""
         return analyze_pricing_power.func(summary=summary)
 
+    @tool
+    def check_qualitative_factors():
+        """Reviews recent news headlines, insider buying/selling activity, and analyst consensus estimates for qualitative signals."""
+        headlines = []
+        if summary.recent_news:
+            headlines = [line.strip() for line in summary.recent_news.split("\n") if line.strip()][:6]
+
+        net_buying = summary.net_insider_buying or 0
+        insider_sentiment = "NET BUYER" if net_buying > 0 else "NET SELLER" if net_buying < 0 else "NEUTRAL"
+
+        return {
+            "recent_news_headlines": headlines,
+            "insider_activity": {
+                "net_buying_usd": net_buying,
+                "buy_transactions": summary.insider_buy_count or 0,
+                "sell_transactions": summary.insider_sell_count or 0,
+                "sentiment": insider_sentiment,
+            },
+            "analyst_consensus": {
+                "period": summary.analyst_estimate_period,
+                "revenue_estimate": summary.analyst_revenue_estimate,
+                "eps_estimate": summary.analyst_eps_estimate,
+            },
+            "details": (
+                f"Insider: {insider_sentiment} (${abs(net_buying):,.0f} net). "
+                f"Analyst EPS est: {summary.analyst_eps_estimate} for {summary.analyst_estimate_period}. "
+                f"{len(headlines)} recent headlines to review."
+            ),
+        }
+
     tools = [
-        check_fundamentals, 
-        check_consistency, 
-        check_moat, 
-        check_management, 
-        check_book_value_growth, 
-        check_intrinsic_value, 
-        check_pricing_power
+        check_fundamentals,
+        check_consistency,
+        check_moat,
+        check_management,
+        check_book_value_growth,
+        check_intrinsic_value,
+        check_pricing_power,
+        check_qualitative_factors,
     ]
-    
+
     llm_with_tools = llm.bind_tools(tools)
 
     # 2. Agent Loop
     messages = [
-        SystemMessage(content=f"""You are a virtual Warren Buffett. Your goal is to evaluate the company {summary.ticker} based on value investing principles.
-    
-    You have access to specific analysis tools. You can call them in any order to gather the insights you need.
-    Once you have enough information, you will provide a final investment signal.
-    
-    Key Principles:
-    - Circle of Competence
-    - Durable Moat
-    - Rational Management
-    - Financial Strength
-    - Margin of Safety (Discount to Intrinsic Value)
-    """),
-        HumanMessage(content=f"Please analyze {summary.ticker} and provide an investment signal.")
+        SystemMessage(content=f"""You are a Warren Buffett-style investment analyst. Evaluate {summary.ticker} using ALL eight domain tools before forming your signal. Do not skip any tool — each captures a distinct dimension of business quality.
+
+TOOLS — call ALL of them (order does not matter):
+1. check_fundamentals        — ROE, ROIC, debt levels, operating margin, liquidity (max score: 9)
+2. check_consistency         — multi-year earnings CAGR + monotonic growth (max score: 4)
+3. check_moat                — historical ROE consistency, margin stability, ROIC (max score: 4)
+4. check_management          — multi-year buyback track record, dividend history (max score: 2)
+5. check_book_value_growth   — BVPS CAGR + period-by-period consistency (max score: 5)
+6. check_intrinsic_value     — 3-stage DCF owner-earnings; yields margin_of_safety vs current price
+7. check_pricing_power       — gross margin trend + absolute level (max score: 5)
+8. check_qualitative_factors — recent news headlines, insider buy/sell activity, analyst EPS/revenue consensus
+
+SIGNAL CALIBRATION:
+- BULLISH 70-100 confidence: Strong moat + consistent earnings + margin_of_safety > 25%. "Wonderful company at fair price."
+- BULLISH 40-69 confidence: Good fundamentals but margin_of_safety modest (<25%) or one weak dimension.
+- NEUTRAL: Mixed — e.g. strong moat but stock is fairly/fully valued, OR improving trajectory but short history.
+- BEARISH: Deteriorating fundamentals, negative multi-year earnings CAGR, trading well above intrinsic value, OR concerning insider selling with negative news.
+
+PORTFOLIO MANAGER CONTEXT: Your confidence score directly controls position sizing. High confidence BULLISH → larger allocation. Low confidence or NEUTRAL → minimal/no new position. BEARISH → reduce exposure. Calibrate honestly — overconfident signals destroy the portfolio.
+
+Buffett's rule: "It is far better to buy a wonderful company at a fair price than a fair company at a wonderful price."\
+"""),
+        HumanMessage(content=f"Analyse {summary.ticker} and provide an investment signal. Call all eight tools first."),
     ]
 
     while True:
