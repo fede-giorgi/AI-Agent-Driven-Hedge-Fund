@@ -1,23 +1,27 @@
+"""Entry point for the AI hedge fund simulation — orchestrates research, analysis, and portfolio management."""
+
+import asyncio
+import importlib.metadata
 import json
 import os
+import random
 import re
-import importlib.metadata
 import sys
 import time
-import asyncio
-import random
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
-from rich.markdown import Markdown
-from rich import box
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 
-from classes.tickers import TICKERS
+from dotenv import load_dotenv
+from rich import box
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.table import Table
+from rich.text import Text
+
 from classes.financial_summary import FinancialSummary
+from classes.tickers import TICKERS
+from config import DEFAULT_TICKERS, RISK_FREE_ANNUAL, TOTAL_ITERATIONS, TOTAL_ITERATIONS_DEBUG
 
 console = Console()
 
@@ -206,7 +210,7 @@ def print_monitor_result(monitor_output: dict) -> None:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_portfolio_allocation(capital: float, tickers: list, trading_date: str = None):
+def generate_portfolio_allocation(capital: float, tickers: list, trading_date: str | None = None):
     """
     Generates an initial equal-weight portfolio allocation for the given tickers.
 
@@ -375,7 +379,6 @@ def get_tickers_to_research():
     Returns:
         List of up to 5 ticker strings.
     """
-    DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "META"]
     console.print("\n[bold]Ticker Selection[/bold]")
     console.print(f"  [cyan]default[/cyan] — use {', '.join(DEFAULT_TICKERS)} (same as --debug)")
     console.print("  [cyan]auto[/cyan]    — pick 5 diversified tickers from the ~600-stock universe")
@@ -574,7 +577,6 @@ def run_backtesting(
     today_dt = datetime.today()
     days_held = max((today_dt - bt_dt).days, 1)
 
-    RISK_FREE_ANNUAL = 0.045  # US T-bill / Fed funds proxy
     risk_free_return = RISK_FREE_ANNUAL * (days_held / 365)
 
     console.rule("[bold blue]Backtesting Evaluation[/bold blue]")
@@ -767,7 +769,7 @@ def main():
         if not check_dependencies():
             sys.exit(1)
         capital = 100000
-        risk_profile = 5
+        risk_profile = 8  # aggressive in debug so trades are exercised
         backtesting_date = (datetime.today() - timedelta(days=90)).strftime('%Y-%m-%d')
         portfolio = {}
         llm_provider = os.getenv("LLM_PROVIDER", "google")
@@ -792,7 +794,7 @@ def main():
                         box=box.ROUNDED, border_style="green", expand=False, padding=(0, 2)))
 
     if debug_mode:
-        tickers_to_research = ["AAPL", "MSFT", "NVDA", "GOOGL", "META"]
+        tickers_to_research = DEFAULT_TICKERS
     else:
         tickers_to_research = get_tickers_to_research()
 
@@ -811,15 +813,23 @@ def main():
     for ticker, summary in financial_data.items():
         print_financial_summary(ticker, summary)
 
-    # 3. Warren Buffett Agent
+    # 3. Warren Buffett Agent — all tickers analysed in parallel
     console.rule("[bold yellow]Warren Buffett Analysis[/bold yellow]")
-    warren_buffett_signals = {}
-    for ticker, summary in financial_data.items():
-        signal_data = warren_buffett_agent(summary)
-        if signal_data and ticker in signal_data:
-            warren_buffett_signals.update(signal_data)
-        else:
-            console.print(f"  - {ticker}: Could not get analysis.")
+
+    async def _run_warren_buffett_all(data: dict, dbg: bool) -> dict:
+        tasks = [warren_buffett_agent(s, debug_mode=dbg) for s in data.values()]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        signals = {}
+        for ticker, result in zip(data.keys(), results):
+            if isinstance(result, Exception):
+                console.print(f"  [red]✗ {ticker}: {result}[/red]")
+            elif result and ticker in result:
+                signals.update(result)
+            else:
+                console.print(f"  [red]✗ {ticker}: no signal returned[/red]")
+        return signals
+
+    warren_buffett_signals = asyncio.run(_run_warren_buffett_all(financial_data, debug_mode))
     console.print("Warren Buffett analysis complete.")
 
     price_map = {
@@ -850,7 +860,7 @@ def main():
     initial_portfolio = portfolio.copy()
     initial_capital = capital
 
-    total_iterations = 3 if debug_mode else 10
+    total_iterations = TOTAL_ITERATIONS_DEBUG if debug_mode else TOTAL_ITERATIONS
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -870,7 +880,8 @@ def main():
             # Portfolio Manager
             _section("Portfolio Manager")
             pm_output = run_portfolio_manager_agent(
-                initial_portfolio, initial_capital, risk_profile, warren_buffett_signals, price_map, i, total_iterations, history
+                initial_portfolio, initial_capital, risk_profile, warren_buffett_signals,
+                price_map, i, total_iterations, history, force_trades=debug_mode,
             )
             proposed_trades = pm_output.get("proposed_trades", [])
             print_trades_table(proposed_trades, price_map, title="PROPOSED TRADES:")
@@ -966,8 +977,29 @@ def main():
         console.print("[yellow]No trades executed based on final decision.[/yellow]")
 
     # --- Backtesting ---
-    if backtesting_date and portfolio:
+    if backtesting_date and (portfolio or initial_capital > 0):
         run_backtesting(portfolio, price_map, backtesting_date, capital, initial_capital, tickers_to_research)
+
+    # --- Token Usage Summary ---
+    from llm import get_usage_summary
+    usage = get_usage_summary(model=llm_model)
+    _section("Token Usage", "dim")
+    usage_table = Table(box=box.ROUNDED, show_edge=True, pad_edge=True,
+                        show_header=False)
+    usage_table.add_column("Metric", style="cyan")
+    usage_table.add_column("Value", justify="right")
+    usage_table.add_row("Model", f"[yellow]{usage['model'] or 'unknown'}[/yellow]")
+    usage_table.add_row("LLM calls", f"[yellow]{usage['calls']:,}[/yellow]")
+    usage_table.add_row("Input tokens", f"[yellow]{usage['input_tokens']:,}[/yellow]")
+    usage_table.add_row("Output tokens", f"[yellow]{usage['output_tokens']:,}[/yellow]")
+    usage_table.add_row("Total tokens", f"[yellow]{usage['total_tokens']:,}[/yellow]")
+    if usage["estimated_cost_usd"] is not None:
+        usage_table.add_row("Est. cost (USD)", f"[yellow]${usage['estimated_cost_usd']:.4f}[/yellow]")
+    else:
+        usage_table.add_row("Est. cost (USD)", "[dim]n/a (model not in price table)[/dim]")
+    if os.getenv("LANGCHAIN_API_KEY"):
+        usage_table.add_row("LangSmith", f"[green]enabled — project: {os.getenv('LANGCHAIN_PROJECT', 'ai-hedge-fund')}[/green]")
+    console.print(usage_table)
 
     # End Timer
     end_time = time.time()

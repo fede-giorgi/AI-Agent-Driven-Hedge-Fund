@@ -1,27 +1,37 @@
+"""What-If Agent — stress-tests the Portfolio Manager's trade proposals with concrete counter-scenarios."""
+
 import json
-from typing import Dict, List, Any, Union
+from typing import Any
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from llm import get_llm
-from langchain_core.messages import SystemMessage, HumanMessage
 
 
 def _text(content) -> str:
-    """Return plain text from an LLM response content (handles str or list of blocks)."""
+    """Return plain text from an LLM response (handles str or list of content blocks)."""
     if isinstance(content, list):
         return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
     return content if isinstance(content, str) else str(content)
 
+
 def run_what_if_agent(
-    current_portfolio: Dict[str, int],
+    current_portfolio: dict[str, int],
     available_capital: float,
-    proposed_trades: List[Dict[str, Union[str, int, float]]],
-    price_map: Dict[str, float],
+    proposed_trades: list[dict[str, str | int | float]],
+    price_map: dict[str, float],
     current_iteration: int,
     total_iterations: int,
-    warren_signals: Dict[str, Any] = None,
-    history: List[Dict[str, Any]] = None
-    ) -> dict:
+    warren_signals: dict[str, Any] | None = None,
+    history: list[dict] | None = None,
+) -> dict:
     """
-    Runs the What-If Agent to simulate the portfolio after applying trades.
+    Challenge the Portfolio Manager's proposal with a concrete counter-scenario.
+
+    Identifies the single biggest risk or inefficiency in the proposed trades and
+    constructs an alternative that respects all hard constraints (no shorting,
+    available_capital). Returns a structured dict with critique, alternative_scenario,
+    and reasoning.
     """
     llm = get_llm()
     

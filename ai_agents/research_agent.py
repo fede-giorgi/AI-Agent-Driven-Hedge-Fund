@@ -1,21 +1,23 @@
+"""Research Agent — gathers and structures financial data for each ticker in parallel."""
+
+import asyncio
 import json
-from typing import List, Dict, Any
 
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from rich.markup import escape
 
-from rich.console import Console
-from llm import get_llm
-
-_console = Console()
 from classes.financial_summary import FinancialSummary, ToolStatus, Error, Result, ResearchAgentOutput
-from tools.get_financials import get_financials
-from tools.get_metrics import get_metrics
-from tools.get_financial_line_items import get_financial_line_items
-from tools.get_stock_prices import get_stock_prices
-from tools.get_company_news import get_company_news
-from tools.get_segmented_revenues import get_segmented_revenues
-from tools.get_insider_trades import get_insider_trades
+from llm import get_llm
+from shared_console import console as _console
 from tools.get_analyst_estimates import get_analyst_estimates
+
+from tools.get_company_news import get_company_news
+from tools.get_financial_line_items import get_financial_line_items
+from tools.get_financials import get_financials
+from tools.get_insider_trades import get_insider_trades
+from tools.get_metrics import get_metrics
+from tools.get_segmented_revenues import get_segmented_revenues
+from tools.get_stock_prices import get_stock_prices
 
 
 # All tools available to the research agent
@@ -50,8 +52,8 @@ _REQUIRED_METRICS = [
 
 
 async def run_research_agent(
-        tickers: List[str],
-        backtesting_date: str = None,
+        tickers: list[str],
+        backtesting_date: str | None = None,
 ) -> ResearchAgentOutput:
     """
     Runs the research agent to gather and structure financial data for a list of tickers.
@@ -79,29 +81,22 @@ async def run_research_agent(
     return agent_output
 
 
-async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output):
+async def _process_single_ticker(ticker, backtesting_date, llm, structured_llm):
     """
-    Processes each ticker sequentially: runs the data-gathering tool loop, then
-    compiles a structured Result via a final structured-output LLM call.
+    Runs the full data-gathering and structuring pipeline for one ticker.
 
-    Args:
-        tickers: Ticker symbols to process.
-        backtesting_date: Optional end-date string for all tool calls.
-        llm: Base LLM instance for the agentic loop.
-        structured_llm: LLM bound to the Result output schema.
-        agent_output: Mutable ResearchAgentOutput to append results/errors into.
+    Returns a Result on success or an Error on failure.
     """
-    for ticker in tickers:
-        _console.print(f"\n[bold cyan]Researching {ticker}...[/bold cyan]")
+    _console.print(f"\n[bold cyan]Researching {ticker}...[/bold cyan]")
 
-        tools = _ALL_TOOLS
-        llm_with_tools = llm.bind_tools(tools)
-        tool_map = {t.name: t for t in tools}
+    tools = _ALL_TOOLS
+    llm_with_tools = llm.bind_tools(tools)
+    tool_map = {t.name: t for t in tools}
 
-        date_instruction = f"Pass `end_date='{backtesting_date}'` to all tools." if backtesting_date else ""
+    date_instruction = f"Pass `end_date='{backtesting_date}'` to all tools." if backtesting_date else ""
 
-        messages = [
-            SystemMessage(content=f"""You are a Data Research Agent feeding a Warren Buffett-style investment pipeline. \
+    messages = [
+        SystemMessage(content=f"""You are a Data Research Agent feeding a Warren Buffett-style investment pipeline. \
 Your sole job is raw data collection for '{ticker}' — do NOT interpret or score the data. \
 Downstream agents will perform all analysis.
 
@@ -115,7 +110,7 @@ CRITICAL DATA REQUIREMENTS (the Warren Buffett Agent needs these to score all 8 
 - Insider trades from get_insider_trades (limit=20, recent transactions only).
 - Analyst estimates from get_analyst_estimates (most forward annual period).
 
-TOOLS — call ALL of them exactly once:
+TOOLS — call each at most once; skip any that clearly cannot return useful data for this ticker:
 - `get_stock_prices`          — current price (default 7-day window is fine)
 - `get_financial_line_items`  — MUST include: {json.dumps(_REQUIRED_LINE_ITEMS)} with limit=8
 - `get_metrics`               — MUST include: {json.dumps(_REQUIRED_METRICS)} with limit=8
@@ -126,42 +121,45 @@ TOOLS — call ALL of them exactly once:
 - `get_analyst_estimates`     — consensus revenue & EPS (limit=4)
 
 {date_instruction}
-Call each tool at most once. Stop once all 8 tools have been called.
+Stop when you have collected all data that is available. Do not retry a tool that already returned an error.
 """),
-            HumanMessage(content=f"Start research for {ticker}."),
-        ]
+        HumanMessage(content=f"Start research for {ticker}."),
+    ]
 
-        tools_called = set()
+    tools_called = set()
 
-        while True:
-            response = await llm_with_tools.ainvoke(messages)
-            messages.append(response)
+    while True:
+        response = await llm_with_tools.ainvoke(messages)
+        messages.append(response)
 
-            if not response.tool_calls:
-                break
+        if not response.tool_calls:
+            break
 
-            for tool_call in response.tool_calls:
-                tool_name = tool_call["name"]
-                args = tool_call["args"]
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            args = tool_call["args"]
 
-                if tool_name in _SINGLE_CALL_TOOLS and tool_name in tools_called:
-                    _console.print(f"  [dim]--> Skipping redundant call: {tool_name}[/dim]")
-                    tool_result = {"error": f"'{tool_name}' already called. Do not call again."}
-                else:
-                    _console.print(f"  [dim]-->[/dim] [cyan]{tool_name}[/cyan]  [dim]args={json.dumps(args)}[/dim]")
-                    try:
-                        tool_result = await tool_map[tool_name].ainvoke(args) if tool_name in tool_map \
-                            else {"error": f"Unknown tool: {tool_name}"}
-                        if isinstance(tool_result, dict) and "error" not in tool_result:
-                            tools_called.add(tool_name)
-                    except Exception as e:
-                        tool_result = {"error": str(e)}
+            if tool_name in _SINGLE_CALL_TOOLS and tool_name in tools_called:
+                _console.print(f"  [dim]({escape(ticker)}) Skipping redundant call: {escape(tool_name)}[/dim]")
+                tool_result = {"error": f"'{tool_name}' already called. Do not call again."}
+            else:
+                args_str = escape(json.dumps(args))
+                if len(args_str) > 80:
+                    args_str = args_str[:77] + "..."
+                _console.print(f"  [dim]({escape(ticker)})[/dim] [cyan]{escape(tool_name)}[/cyan]  [dim]{args_str}[/dim]")
+                try:
+                    tool_result = await tool_map[tool_name].ainvoke(args) if tool_name in tool_map \
+                        else {"error": f"Unknown tool: {tool_name}"}
+                    if isinstance(tool_result, dict) and "error" not in tool_result:
+                        tools_called.add(tool_name)
+                except Exception as e:
+                    tool_result = {"error": str(e)}
 
-                messages.append(ToolMessage(content=json.dumps(tool_result), tool_call_id=tool_call["id"]))
+            messages.append(ToolMessage(content=json.dumps(tool_result), tool_call_id=tool_call["id"]))
 
-        # --- Structured compilation ---
-        try:
-            system_message = SystemMessage(content="""You are a Data Structuring Expert. Parse the conversation history
+    # --- Structured compilation ---
+    try:
+        system_message = SystemMessage(content="""You are a Data Structuring Expert. Parse the conversation history
 and populate the `Result` model precisely.
 
 STANDARD FIELDS:
@@ -208,10 +206,34 @@ TOOL STATUS:
 
 Output valid JSON matching the Result model.
 """)
-            result = structured_llm.invoke([system_message] + messages)
-            agent_output.results.append(result)
-            _console.print(f"  [green]✓ {ticker} structured successfully.[/green]")
+        result = await structured_llm.ainvoke([system_message] + messages)
+        _console.print(f"  [green]✓ {ticker} structured successfully.[/green]")
+        return result
 
-        except Exception as e:
-            agent_output.errors.append(Error(tool="processing_chain", message=str(e), ticker=ticker))
-            _console.print(f"  [red]✗ {ticker} structuring failed: {e}[/red]")
+    except Exception as e:
+        _console.print(f"  [red]✗ {ticker} structuring failed: {e}[/red]")
+        return Error(tool="processing_chain", message=str(e), ticker=ticker)
+
+
+async def _process_tickers(tickers, backtesting_date, llm, structured_llm, agent_output):
+    """
+    Processes all tickers in parallel using asyncio.gather, then appends
+    results/errors to agent_output.
+
+    Args:
+        tickers: Ticker symbols to process.
+        backtesting_date: Optional end-date string for all tool calls.
+        llm: Base LLM instance for the agentic loop.
+        structured_llm: LLM bound to the Result output schema.
+        agent_output: Mutable ResearchAgentOutput to append results/errors into.
+    """
+    tasks = [_process_single_ticker(ticker, backtesting_date, llm, structured_llm) for ticker in tickers]
+    outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for ticker, outcome in zip(tickers, outcomes):
+        if isinstance(outcome, Exception):
+            agent_output.errors.append(Error(tool="processing_chain", message=str(outcome), ticker=ticker))
+        elif isinstance(outcome, Error):
+            agent_output.errors.append(outcome)
+        else:
+            agent_output.results.append(outcome)

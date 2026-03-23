@@ -1,4 +1,7 @@
+"""Fetch insider buy/sell transactions (Form 4 filings) from FinancialDatasets.ai."""
+
 import os
+
 import requests
 from dotenv import load_dotenv
 from langchain.tools import tool
@@ -12,7 +15,7 @@ FINDAT_API_KEY = os.getenv("FINDAT_API_KEY")
 def get_insider_trades(
     ticker: str,
     limit: int = 20,
-    end_date: str = None,
+    end_date: str | None = None,
 ) -> dict:
     """
     Fetches recent insider buy/sell transactions for a ticker.

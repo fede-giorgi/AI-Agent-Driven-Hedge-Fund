@@ -1,4 +1,7 @@
+"""Fundamentals analysis tool — scores financial health across profitability, leverage, and liquidity."""
+
 from langchain.tools import tool
+
 from classes.financial_summary import FinancialSummary
 
 

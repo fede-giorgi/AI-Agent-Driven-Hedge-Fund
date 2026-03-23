@@ -1,4 +1,7 @@
+"""Fetch Wall Street analyst consensus estimates for revenue and EPS from FinancialDatasets.ai."""
+
 import os
+
 import requests
 from dotenv import load_dotenv
 from langchain.tools import tool
@@ -13,7 +16,7 @@ def get_analyst_estimates(
     ticker: str,
     period: str = "annual",
     limit: int = 4,
-    end_date: str = None,
+    end_date: str | None = None,
 ) -> dict:
     """
     Fetches analyst consensus forward estimates for revenue and earnings per share.

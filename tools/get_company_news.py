@@ -1,4 +1,7 @@
+"""Fetch recent news articles for a ticker from FinancialDatasets.ai."""
+
 import os
+
 import requests
 from dotenv import load_dotenv
 from langchain.tools import tool

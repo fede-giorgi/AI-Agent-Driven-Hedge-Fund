@@ -1,4 +1,5 @@
 from langchain.tools import tool
+
 from classes.financial_summary import FinancialSummary
 
 

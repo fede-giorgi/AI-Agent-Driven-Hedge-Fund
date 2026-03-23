@@ -1,4 +1,7 @@
+"""Intrinsic value tools — owner earnings calculation, WACC estimation, and 3-stage DCF valuation."""
+
 from langchain.tools import tool
+
 from classes.financial_summary import FinancialSummary
 
 

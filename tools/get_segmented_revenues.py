@@ -1,4 +1,7 @@
+"""Fetch business-segment and geographic revenue breakdowns from FinancialDatasets.ai."""
+
 import os
+
 import requests
 from dotenv import load_dotenv
 from langchain.tools import tool
@@ -13,7 +16,7 @@ def get_segmented_revenues(
     ticker: str,
     period: str = "annual",
     limit: int = 4,
-    end_date: str = None,
+    end_date: str | None = None,
 ) -> dict:
     """
     Fetches segmented (business-unit / geographic) revenue data for a ticker.

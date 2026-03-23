@@ -1,4 +1,7 @@
+"""Moat analysis tool — scores a company's durable competitive advantage."""
+
 from langchain.tools import tool
+
 from classes.financial_summary import FinancialSummary
 
 

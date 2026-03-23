@@ -28,7 +28,7 @@ An autonomous Multi-Agent System (MAS) that simulates a hedge fund end-to-end. A
 
 ## 🎬 Demo
 
-![Demo](/utils/demo.gif)
+![Demo](/utils/demo6.gif)
 
 ---
 

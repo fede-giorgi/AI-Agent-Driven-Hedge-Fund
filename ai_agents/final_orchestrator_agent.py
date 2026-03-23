@@ -1,27 +1,47 @@
+"""Final Orchestrator Agent — makes the definitive trading decision after the multi-iteration debate loop."""
+
 import json
-from typing import Dict, List, Any
-from llm import get_llm
-from langchain_core.messages import SystemMessage, HumanMessage
+from typing import Any
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
+
+from llm import get_llm
 
 
 def _text(content) -> str:
-    """Return plain text from an LLM response content (handles str or list of blocks)."""
+    """Return plain text from an LLM response (handles str or list of content blocks)."""
     if isinstance(content, list):
         return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
     return content if isinstance(content, str) else str(content)
 
+
 def run_final_orchestrator_agent(
-    initial_portfolio: Dict[str, int],
+    initial_portfolio: dict[str, int],
     initial_capital: float,
-    warren_signals: Dict[str, Any],
-    price_map: Dict[str, float],
-    history: List[Dict[str, Any]]
+    warren_signals: dict[str, Any],
+    price_map: dict[str, float],
+    history: list[dict],
 ) -> dict:
     """
-    Runs the Final Orchestrator Agent to make the definitive trading decision after the iteration loop.
+    Makes the definitive trading decision after reviewing the full multi-iteration debate.
+
+    Synthesises or selects from the Portfolio Manager, Monitor, and What-If proposals
+    across all iterations, applying consensus checks, Monitor compliance, and
+    Warren Buffett signal alignment.
+
+    Args:
+        initial_portfolio: Holdings at the start of this run (ticker → shares).
+        initial_capital: Cash available at the start of this run.
+        warren_signals: Dict of ticker → WarrenBuffettSignal dict.
+        price_map: Dict of ticker → current price.
+        history: Full iteration history list (PM proposal, monitor result, what-if critique per iteration).
+
+    Returns:
+        dict with ``agent``, ``final_decision_reasoning``, ``final_trades``,
+        ``expected_portfolio``, and ``expected_capital``.
     """
     llm = get_llm()
     
@@ -88,7 +108,7 @@ Output JSON ONLY:
             "final_trades": []
         }
 
-def generate_ascii_chart(history: List[Dict[str, Any]]) -> Table:
+def generate_ascii_chart(history: list[dict]) -> Table:
     """
     Generates a Rich Table showing trade proposals (quantities) over iterations for both agents.
     """
@@ -98,18 +118,15 @@ def generate_ascii_chart(history: List[Dict[str, Any]]) -> Table:
     table.add_column("PM Proposal", justify="right", style="green")
     table.add_column("What-If Proposal", justify="right", style="blue")
     
-    # Iterate through history to populate the table
     for iteration in history:
         iter_num = iteration.get("iteration", "?")
-        
-        # Collect trades from PM
+
         pm_trades = {}
         if "pm_proposal" in iteration and "proposed_trades" in iteration["pm_proposal"]:
             for trade in iteration["pm_proposal"]["proposed_trades"]:
                 qty = trade["shares"] if trade["action"] == "buy" else -trade["shares"]
                 pm_trades[trade["ticker"]] = qty
 
-        # Collect trades from What-If
         wi_trades = {}
         if "what_if_critique" in iteration and "alternative_scenario" in iteration["what_if_critique"]:
             alt = iteration["what_if_critique"]["alternative_scenario"]
@@ -118,9 +135,8 @@ def generate_ascii_chart(history: List[Dict[str, Any]]) -> Table:
                     qty = trade["shares"] if trade["action"] == "buy" else -trade["shares"]
                     wi_trades[trade["ticker"]] = qty
 
-        # Union of tickers for this iteration
         all_tickers = set(pm_trades.keys()) | set(wi_trades.keys())
-        
+
         if not all_tickers:
             table.add_row(str(iter_num), "-", "-", "-")
             continue
@@ -128,9 +144,7 @@ def generate_ascii_chart(history: List[Dict[str, Any]]) -> Table:
         for i, ticker in enumerate(sorted(all_tickers)):
             pm_qty = f"{pm_trades.get(ticker, 0):+d}" if ticker in pm_trades else "-"
             wi_qty = f"{wi_trades.get(ticker, 0):+d}" if ticker in wi_trades else "-"
-            
-            # Only show iteration number on the first row of the group
-            row_iter = str(iter_num) if i == 0 else ""
+            row_iter = str(iter_num) if i == 0 else ""  # show iter number only on first ticker row
             table.add_row(row_iter, ticker, pm_qty, wi_qty)
         
         table.add_section()

@@ -1,7 +1,0 @@
-requests
-python-dotenv
-langchain
-pydantic
-langchain-google-genai
-langchain-anthropic
-rich

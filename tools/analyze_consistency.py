@@ -1,6 +1,8 @@
+"""Consistency analysis tool — scores earnings growth track record across multiple historical periods."""
+
 from langchain.tools import tool
+
 from classes.financial_summary import FinancialSummary
-import math
 
 
 @tool(description="Checks for a track record of consistent and growing earnings using multi-period historical data.")

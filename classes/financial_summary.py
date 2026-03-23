@@ -1,95 +1,103 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
-from typing import Optional, List, Literal, Optional
+
 
 class FinancialSummary(BaseModel):
+    """Aggregated financial data for a single ticker, compiled by the Research Agent."""
+
     ticker: str
-    price: Optional[float] = None
+    price: float | None = None
 
-    # Metrics from get_metrics
-    market_cap: Optional[float] = None
-    enterprise_value: Optional[float] = None
-    price_to_earnings_ratio: Optional[float] = None
-    price_to_book_ratio: Optional[float] = None
-    price_to_sales_ratio: Optional[float] = None
-    enterprise_value_to_ebitda_ratio: Optional[float] = None
-    enterprise_value_to_revenue_ratio: Optional[float] = None
-    free_cash_flow_yield: Optional[float] = None
-    peg_ratio: Optional[float] = None
-    gross_margin: Optional[float] = None
-    operating_margin: Optional[float] = None
-    net_margin: Optional[float] = None
-    return_on_equity: Optional[float] = None
-    return_on_assets: Optional[float] = None
-    return_on_invested_capital: Optional[float] = None
-    asset_turnover: Optional[float] = None
-    inventory_turnover: Optional[float] = None
-    receivables_turnover: Optional[float] = None
-    days_sales_outstanding: Optional[float] = None
-    operating_cycle: Optional[float] = None
-    working_capital_turnover: Optional[float] = None
-    current_ratio: Optional[float] = None
-    quick_ratio: Optional[float] = None
-    cash_ratio: Optional[float] = None
-    operating_cash_flow_ratio: Optional[float] = None
-    debt_to_equity: Optional[float] = None
-    debt_to_assets: Optional[float] = None
-    interest_coverage: Optional[float] = None
-    revenue_growth: Optional[float] = None
-    earnings_growth: Optional[float] = None
-    book_value_growth: Optional[float] = None
-    earnings_per_share_growth: Optional[float] = None
-    free_cash_flow_growth: Optional[float] = None
-    operating_income_growth: Optional[float] = None
-    ebitda_growth: Optional[float] = None
-    payout_ratio: Optional[float] = None
-    earnings_per_share: Optional[float] = None
-    book_value_per_share: Optional[float] = None
-    free_cash_flow_per_share: Optional[float] = None
+    # ── Valuation & efficiency metrics (from get_metrics) ────────────────────
+    market_cap: float | None = None
+    enterprise_value: float | None = None
+    price_to_earnings_ratio: float | None = None
+    price_to_book_ratio: float | None = None
+    price_to_sales_ratio: float | None = None
+    enterprise_value_to_ebitda_ratio: float | None = None
+    enterprise_value_to_revenue_ratio: float | None = None
+    free_cash_flow_yield: float | None = None
+    peg_ratio: float | None = None
+    gross_margin: float | None = None
+    operating_margin: float | None = None
+    net_margin: float | None = None
+    return_on_equity: float | None = None
+    return_on_assets: float | None = None
+    return_on_invested_capital: float | None = None
+    asset_turnover: float | None = None
+    inventory_turnover: float | None = None
+    receivables_turnover: float | None = None
+    days_sales_outstanding: float | None = None
+    operating_cycle: float | None = None
+    working_capital_turnover: float | None = None
+    current_ratio: float | None = None
+    quick_ratio: float | None = None
+    cash_ratio: float | None = None
+    operating_cash_flow_ratio: float | None = None
+    debt_to_equity: float | None = None
+    debt_to_assets: float | None = None
+    interest_coverage: float | None = None
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    book_value_growth: float | None = None
+    earnings_per_share_growth: float | None = None
+    free_cash_flow_growth: float | None = None
+    operating_income_growth: float | None = None
+    ebitda_growth: float | None = None
+    payout_ratio: float | None = None
+    earnings_per_share: float | None = None
+    book_value_per_share: float | None = None
+    free_cash_flow_per_share: float | None = None
 
-    # Line items from get_financial_line_items
-    capital_expenditure: Optional[float] = None
-    depreciation_and_amortization: Optional[float] = None
-    net_income: Optional[float] = None
-    outstanding_shares: Optional[float] = None
-    total_assets: Optional[float] = None
-    total_liabilities: Optional[float] = None
-    shareholders_equity: Optional[float] = None
-    dividends_and_other_cash_distributions: Optional[float] = None
-    issuance_or_purchase_of_equity_shares: Optional[float] = None
-    gross_profit: Optional[float] = None
-    revenue: Optional[float] = None
-    free_cash_flow: Optional[float] = None
-    current_assets: Optional[float] = None
-    current_liabilities: Optional[float] = None
+    # ── Income statement / balance sheet line items (from get_financial_line_items) ──
+    capital_expenditure: float | None = None
+    depreciation_and_amortization: float | None = None
+    net_income: float | None = None
+    outstanding_shares: float | None = None
+    total_assets: float | None = None
+    total_liabilities: float | None = None
+    shareholders_equity: float | None = None
+    dividends_and_other_cash_distributions: float | None = None
+    issuance_or_purchase_of_equity_shares: float | None = None
+    gross_profit: float | None = None
+    revenue: float | None = None
+    free_cash_flow: float | None = None
+    current_assets: float | None = None
+    current_liabilities: float | None = None
 
-    # Historical time-series (most recent first) for multi-period analysis
-    historical_net_income: Optional[List[float]] = None
-    historical_revenue: Optional[List[float]] = None
-    historical_gross_profit: Optional[List[float]] = None
-    historical_return_on_equity: Optional[List[float]] = None
-    historical_operating_margin: Optional[List[float]] = None
-    historical_shareholders_equity: Optional[List[float]] = None
-    historical_outstanding_shares: Optional[List[float]] = None
-    historical_issuance_or_purchase_of_equity_shares: Optional[List[float]] = None
+    # ── Historical time-series (most-recent first, up to 8 periods) ──────────
+    historical_net_income: list[float] | None = None
+    historical_revenue: list[float] | None = None
+    historical_gross_profit: list[float] | None = None
+    historical_return_on_equity: list[float] | None = None
+    historical_operating_margin: list[float] | None = None
+    historical_shareholders_equity: list[float] | None = None
+    historical_outstanding_shares: list[float] | None = None
+    historical_issuance_or_purchase_of_equity_shares: list[float] | None = None
 
-    # News summary from FinancialDatasets.ai company news endpoint
-    recent_news: Optional[str] = None
+    # ── Qualitative signals ───────────────────────────────────────────────────
 
-    # Segmented revenues — most recent period's business-segment breakdown
-    # e.g. {"iPhone": 200.5e9, "Services": 85.2e9, ...}
-    segmented_revenue: Optional[dict] = None
+    # News summary from FinancialDatasets.ai; formatted as "[date] headline (source)\n..."
+    recent_news: str | None = None
 
-    # Insider trading signals — derived from recent Form 4 filings
-    net_insider_buying: Optional[float] = None   # positive = net $ bought, negative = net $ sold
-    insider_buy_count: Optional[int] = None      # # of distinct buy transactions
-    insider_sell_count: Optional[int] = None     # # of distinct sell transactions
+    # Most-recent period's business-segment breakdown, e.g. {"iPhone": 200.5e9}
+    segmented_revenue: dict[str, float] | None = None
 
-    # Analyst consensus estimates (latest annual period)
-    analyst_revenue_estimate: Optional[float] = None
-    analyst_eps_estimate: Optional[float] = None
-    analyst_estimate_period: Optional[str] = None
+    # Derived from recent Form 4 filings; positive = net buying, negative = net selling
+    net_insider_buying: float | None = None
+    insider_buy_count: int | None = None
+    insider_sell_count: int | None = None
+
+    # Analyst consensus for the next annual period
+    analyst_revenue_estimate: float | None = None
+    analyst_eps_estimate: float | None = None
+    analyst_estimate_period: str | None = None
+
 
 class ToolStatus(BaseModel):
+    """Tracks which data-gathering tools succeeded or were skipped for a ticker."""
+
     get_financials: Literal["ok", "error"]
     get_metrics: Literal["ok", "error"]
     get_financial_line_items: Literal["ok", "error"]
@@ -99,30 +107,51 @@ class ToolStatus(BaseModel):
     get_insider_trades: Literal["ok", "error", "skipped"] = "skipped"
     get_analyst_estimates: Literal["ok", "error", "skipped"] = "skipped"
 
+
 class Error(BaseModel):
+    """Represents a tool or processing failure for a specific ticker."""
+
     tool: str
     message: str
     ticker: str
 
+
 class Result(BaseModel):
+    """Full research output for a single ticker, ready for downstream agents."""
+
     ticker: str
     financial_summary: FinancialSummary
-    extra_fields: dict = Field(default_factory=dict)
     tool_status: ToolStatus
-    data_quality_notes: List[str] = Field(default_factory=list)
-    errors: List[Error] = Field(default_factory=list)
+    extra_fields: dict = Field(default_factory=dict)
+    data_quality_notes: list[str] = Field(
+        default_factory=list,
+        description="Free-text notes on missing data or unusual values found during structuring.",
+    )
+    errors: list[Error] = Field(
+        default_factory=list,
+        description="Non-fatal tool errors encountered while gathering data for this ticker.",
+    )
+
 
 class ResearchAgentOutput(BaseModel):
+    """Aggregated output of the Research Agent across all requested tickers."""
+
     agent: str = "research_agent"
     period: str = "annual"
-    requested_tickers: List[str]
-    results: List[Result] = Field(default_factory=list)
-    errors: List[Error] = Field(default_factory=list)
-
+    requested_tickers: list[str]
+    results: list[Result] = Field(default_factory=list)
+    errors: list[Error] = Field(default_factory=list)
 
 
 class WarrenBuffettSignal(BaseModel):
-    """The final output of the Warren Buffett agent."""
-    signal: Literal["bullish", "bearish", "neutral"] = Field(description="The investment signal for the stock.")
-    confidence: int = Field(description="The confidence level of the signal, from 0 to 100.")
-    reasoning: str = Field(description="A brief reasoning for the signal.")
+    """Investment signal produced by the Warren Buffett analysis agent."""
+
+    signal: Literal["bullish", "bearish", "neutral"] = Field(
+        description="Directional conviction: bullish = buy, bearish = reduce/avoid, neutral = hold.",
+    )
+    confidence: int = Field(
+        description="Conviction level 0–100. Drives position sizing in the Portfolio Manager.",
+    )
+    reasoning: str = Field(
+        description="Concise rationale referencing the specific tool outputs that drove the signal.",
+    )
